@@ -1,0 +1,15 @@
+server:
+  port: 8080
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/healthineersvisualization?useSSL=false&serverTimezone=UTC
+    username: root
+    password: 123
+    driver-class-name: com.mysql.jdbc.Driver
+
+mybatis-plus:
+  type-aliases-package: com.demo.entity
+
+logging:
+  level:
+    com.demo: debug

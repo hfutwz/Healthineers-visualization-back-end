@@ -9,6 +9,7 @@ spring:
 
 mybatis-plus:
   type-aliases-package: com.demo.entity
+  mapper-locations: classpath:mapper/*.xml
 
 logging:
   level:

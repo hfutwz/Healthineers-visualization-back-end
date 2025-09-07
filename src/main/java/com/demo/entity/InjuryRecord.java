@@ -70,7 +70,6 @@ public class InjuryRecord implements Serializable {
     private Integer timePeriod;
     /**
      * 来院方式
-     * 0：门诊 1：住院
      */
     private String arrivalMethod;
     /**

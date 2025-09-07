@@ -1,6 +1,7 @@
 package com.demo.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
@@ -32,9 +33,9 @@ import java.io.Serializable;
 public class Patient implements Serializable {
     private static final long serialVersionUID = 1L;
     /**
-     * 患者ID，主键
+     * 患者ID，唯一
      */
-    @TableId(value = "patient_id", type = IdType.AUTO)
+    @TableField(value = "patient_id")
     private Integer patientId;
     /**
      *  性别
@@ -47,7 +48,8 @@ public class Patient implements Serializable {
     /**
      * 是否绿色通道
      */
-    private Integer isGreenChannel;
+    @TableField("is_green_channel")
+    private String isGreenChannel;
     /**
      * 身高 cm
      */

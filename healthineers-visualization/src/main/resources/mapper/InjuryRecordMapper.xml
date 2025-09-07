@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.demo.mapper.InjuryRecordMapper">
+
+    <!-- 根据日期+时间段筛选 -->
+    <select id="selectLocationsByTimeRange" parameterType="map" resultType="com.demo.dto.AddressCountDTO">
+        SELECT latitude, longitude, COUNT(*) as count
+        FROM injuryrecord
+        WHERE admission_date BETWEEN #{startDate} AND #{endDate}
+        <if test="timePeriods != null and size() > 0">
+            AND (time_period IN
+            <foreach collection="timePeriods" item="tp" open="(" separator="," close=")">
+                #{tp}
+            </foreach>
+            )
+        </if>
+        AND latitude IS NOT NULL
+        AND longitude IS NOT NULL
+        GROUP BY latitude, longitude
+    </select>
+
+    <!-- 根据季节和时间段筛选 -->
+    <select id="selectLocationsBySeasonsAndTime" parameterType="map" resultType="com.demo.dto.AddressCountDTO">
+        SELECT latitude, longitude, COUNT(*) as count
+        FROM injuryrecord
+        WHERE season IN
+        <foreach collection="seasons" item="s" open="(" separator="," close=")">
+            #{s}
+        </foreach>
+        <if test="timePeriods != null and size() > 0">
+            AND (time_period IN
+            <foreach collection="timePeriods" item="tp" open="(" separator="," close=")">
+                #{tp}
+            </foreach>
+            )
+        </if>
+        AND latitude IS NOT NULL
+        AND longitude IS NOT NULL
+        GROUP BY latitude, longitude
+    </select>
+
+</mapper>

@@ -9,9 +9,12 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class IssInjuryServiceImpl extends ServiceImpl<IssInjuryMapper, IssInjury> implements IIssInjuryService {
-
+    @Autowired
+    private IssInjuryMapper issInjuryMapper;
     @Override
     public IssInjury getByPatientId(Integer patientId) {
         return baseMapper.selectByPatientId(patientId);
@@ -42,5 +45,25 @@ public class IssInjuryServiceImpl extends ServiceImpl<IssInjuryMapper, IssInjury
         dto.setInjurySeverity(severity);
 
         return dto;
+    }
+
+    @Override
+    public List<IssInjuryDTO> getInjuryByLocationAndFilters(
+            Double longitude, Double latitude, List<Integer> seasons, List<Integer> timePeriods) {
+        // 调用Mapper，传递参数，返回数据
+        List<IssInjuryDTO> injuries = issInjuryMapper.selectInjuryByLocationAndFilters(longitude, latitude, seasons, timePeriods);
+
+        for (IssInjuryDTO injury : injuries) {
+            int severity;
+            if (injury.getIssScore() <= 16) {
+                severity = 0; // 轻伤
+            } else if (injury.getIssScore() > 25) {
+                severity = 2; // 严重
+            } else {
+                severity = 1; // 重伤
+            }
+            injury.setInjurySeverity(severity);
+        }
+        return injuries;
     }
 }

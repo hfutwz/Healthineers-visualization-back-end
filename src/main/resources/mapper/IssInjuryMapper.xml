@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.demo.mapper.IssInjuryMapper">
+
+    <select id="selectInjuryByLocationAndFilters" resultType="com.demo.dto.IssInjuryDTO">
+        SELECT
+        ir.patient_id AS patientId,
+        iss.head_neck AS headNeck,
+        iss.face AS face,
+        iss.chest AS chest,
+        iss.abdomen AS abdomen,
+        iss.limbs AS limbs,
+        iss.body AS body,
+        iss.iss_score AS issScore
+        FROM injuryrecord ir
+        LEFT JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE
+        1=1
+        <if test="seasons != null and seasons.size() > 0">
+            AND ir.season IN
+            <foreach collection="seasons" item="s" separator="," open="(" close=")">
+                #{s}
+            </foreach>
+        </if>
+        <if test="timePeriods != null and timePeriods.size() > 0">
+            AND ir.time_period IN
+            <foreach collection="timePeriods" item="tp" separator="," open="(" close=")">
+                #{tp}
+            </foreach>
+        </if>
+        AND (
+        6371000 * 2 * ASIN(SQRT(
+        POWER(SIN(RADIANS(#{latitude} - ir.latitude) / 2), 2) +
+        COS(RADIANS(#{latitude})) * COS(RADIANS(ir.latitude)) *
+        POWER(SIN(RADIANS(#{longitude} - ir.longitude) / 2), 2)
+        ))
+        ) &lt; 500
+    </select>
+
+</mapper>

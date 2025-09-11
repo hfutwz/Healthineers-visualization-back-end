@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.demo.dto.IssInjuryDTO;
 import com.demo.entity.IssInjury;
 
+import java.util.List;
+
 public interface IIssInjuryService extends IService<IssInjury> {
     /**
      * 根据ID,获取创伤信息（未使用）
@@ -18,4 +20,10 @@ public interface IIssInjuryService extends IService<IssInjury> {
      * @return
      */
     IssInjuryDTO getInjuryDTOByPatientId(Integer patientId);
+
+    /**
+     * 根据经度、纬度、季节和时间段查询伤情信息
+     */
+    List<IssInjuryDTO> getInjuryByLocationAndFilters(Double longitude, Double latitude, List<Integer> seasons, List<Integer> timePeriods);
+
 }

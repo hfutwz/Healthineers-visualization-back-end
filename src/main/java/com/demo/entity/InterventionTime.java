@@ -132,4 +132,32 @@ public class InterventionTime {
      * 离开抢救室时间
      */
     private String leaveSurgeryTime;
+    /**
+     * 心肺复苏(是/否)
+     */
+    private String cpr;
+    /**
+     * 输血(是/否)
+     */
+    private String transfusion;
+    /**
+     * 离开抢救室日期
+     */
+    private LocalDate leaveSurgeryDate;
+    /**
+     * 病人去向
+     */
+    private String patientDestination;
+    /**
+     * 死亡(是/否)
+     */
+    private String death;
+    /**
+     * 死亡日期
+     */
+    private LocalDate deathDate;
+    /**
+     * 死亡时间
+     */
+    private String deathTime;
 }

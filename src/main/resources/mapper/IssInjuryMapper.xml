@@ -13,7 +13,14 @@
         iss.abdomen AS abdomen,
         iss.limbs AS limbs,
         iss.body AS body,
-        iss.iss_score AS issScore
+        iss.iss_score AS issScore,
+        iss.head_neck_details AS headNeckDetails,
+        iss.face_details AS faceDetails,
+        iss.chest_details AS chestDetails,
+        iss.abdomen_details AS abdomenDetails,
+        iss.limbs_details AS limbsDetails,
+        iss.body_details AS bodyDetails,
+        iss.has_details AS hasDetails
         FROM injuryrecord ir
         LEFT JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
         WHERE

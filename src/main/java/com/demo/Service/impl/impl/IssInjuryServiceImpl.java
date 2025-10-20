@@ -39,6 +39,8 @@ public class IssInjuryServiceImpl extends ServiceImpl<IssInjuryMapper, IssInjury
         // 复制公共字段
         IssInjuryDTO dto = new IssInjuryDTO();
         BeanUtils.copyProperties(injury, dto);
+
+        // 设置额外字段
         dto.setPatientId(patientId);
         dto.setInjurySeverity(severity);
 
@@ -56,7 +58,7 @@ public class IssInjuryServiceImpl extends ServiceImpl<IssInjuryMapper, IssInjury
             if (injury.getIssScore() <= 16) {
                 severity = 0; // 轻伤
             } else if (injury.getIssScore() > 25) {
-                severity = 2; // 严重伤
+                severity = 2; // 严重
             } else {
                 severity = 1; // 重伤
             }

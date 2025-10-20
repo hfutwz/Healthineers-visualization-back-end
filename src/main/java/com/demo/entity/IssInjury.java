@@ -35,10 +35,6 @@ public class IssInjury implements Serializable {
     @TableId(value = "injury_id", type = IdType.AUTO)
     private Integer injuryId;
     /**
-     * 患者ID
-     */
-    private Integer patientId;
-    /**
      * 头颈部伤情等级 0-6, 0表示无伤情，1-6表示不同程度
      */
     private Integer headNeck;
@@ -66,39 +62,4 @@ public class IssInjury implements Serializable {
      * ISS评分
      */
     private Integer issScore; // ISS评分
-    
-    /**
-     * 头颈部详细伤情
-     */
-    private String headNeckDetails;
-    
-    /**
-     * 面部详细伤情
-     */
-    private String faceDetails;
-    
-    /**
-     * 胸部详细伤情
-     */
-    private String chestDetails;
-    
-    /**
-     * 腹部详细伤情
-     */
-    private String abdomenDetails;
-    
-    /**
-     * 四肢详细伤情
-     */
-    private String limbsDetails;
-    
-    /**
-     * 体表详细伤情
-     */
-    private String bodyDetails;
-    
-    /**
-     * 是否有详细伤情信息
-     */
-    private Boolean hasDetails;
 }

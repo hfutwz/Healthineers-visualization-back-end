@@ -8,6 +8,26 @@ import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
 import java.io.Serializable;
+/**
+ * 建表语句
+ * CREATE TABLE patient_info_on_admission (
+ *     id INT AUTO_INCREMENT PRIMARY KEY,
+ *     patient_id INT NOT NULL,
+ *     systolic_bp INT DEFAULT 0 COMMENT '血压高压',
+ *     diastolic_bp INT DEFAULT 0 COMMENT '血压低压',
+ *     heart_rate INT DEFAULT 0 COMMENT '心率',
+ *     respiratory_rate INT DEFAULT 0 COMMENT '呼吸频率',
+ *     medical_history VARCHAR(500) DEFAULT '' COMMENT '既往病史',
+ *     temperature FLOAT DEFAULT 0.0 COMMENT '入室温度',
+ *     oxygen_saturation INT DEFAULT 0 COMMENT '指脉氧',
+ *     consciousness VARCHAR(100) DEFAULT '' COMMENT '精神意识',
+ *     skin VARCHAR(100) DEFAULT '' COMMENT '皮肤',
+ *     drunk BOOLEAN DEFAULT FALSE COMMENT '醉酒',
+ *     pupil VARCHAR(100) DEFAULT '' COMMENT '瞳孔',
+ *     light_reflex VARCHAR(100) DEFAULT '' COMMENT '对光反射',
+ *     FOREIGN KEY (patient_id) REFERENCES patient(patient_id)
+ * );
+ */
 
 /**
  * 患者入室前信息表实体类

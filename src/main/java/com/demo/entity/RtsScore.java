@@ -8,6 +8,18 @@ import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
 import java.io.Serializable;
+/**
+ * 建表语句
+ * CREATE TABLE rts_score (
+ *     rts_id INT PRIMARY KEY AUTO_INCREMENT COMMENT 'RTS评分ID',
+ *     patient_id INT NOT NULL COMMENT '患者ID',
+ *     gcs_score INT NOT NULL COMMENT 'GCS评分(0-4)',
+ *     sbp_score INT NOT NULL COMMENT '收缩压评分(0-4)',
+ *     rr_score INT NOT NULL COMMENT '呼吸频率评分(0-4)',
+ *     INDEX idx_patient_id (patient_id),
+ *     FOREIGN KEY (patient_id) REFERENCES patient(patient_id) ON DELETE CASCADE ON UPDATE CASCADE
+ * ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RTS评分表';
+ */
 
 /**
  * RTS评分表实体类

@@ -3,6 +3,7 @@ package com.demo.Service.impl.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.demo.Service.impl.IInjuryRecordService;
 import com.demo.dto.AddressCountDTO;
+import com.demo.dto.HourlyStatisticsDTO;
 import com.demo.entity.InjuryRecord;
 import com.demo.mapper.InjuryRecordMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,8 +32,18 @@ public class InjuryRecordImpl extends ServiceImpl<InjuryRecordMapper, InjuryReco
     }
 
     @Override
-    public List<AddressCountDTO> getLocationsBySeasonsAndTime(List<Integer> seasons, List<Integer> timePeriods) {
-        return baseMapper.selectLocationsBySeasonsAndTime(seasons, timePeriods);
+    public List<AddressCountDTO> getLocationsBySeasonsAndTime(List<Integer> seasons, List<Integer> timePeriods, List<Integer> years) {
+        return baseMapper.selectLocationsBySeasonsAndTime(seasons, timePeriods, years);
+    }
+
+    @Override
+    public List<HourlyStatisticsDTO> getHourlyStatistics(Integer year, List<Integer> seasons, String startDate, String endDate) {
+        return baseMapper.selectHourlyStatistics(year, seasons, startDate, endDate);
+    }
+
+    @Override
+    public List<Integer> getAvailableYears() {
+        return baseMapper.selectAvailableYears();
     }
 
 }

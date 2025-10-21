@@ -2,6 +2,7 @@ package com.demo.controller;
 
 import com.demo.Service.impl.IInjuryRecordService;
 import com.demo.dto.AddressCountDTO;
+import com.demo.dto.HourlyStatisticsDTO;
 import com.demo.dto.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,10 +32,36 @@ public class InjuryRecordController {
      * @return
      */
     @GetMapping("/locations")
-    public Result getLocations(@RequestParam(required = false) List<Integer> seasons,
-                               @RequestParam(required = false) List<Integer> timePeriods) {
-        // 这里调用service
-        List<AddressCountDTO> locations = injuryRecordService.getLocationsBySeasonsAndTime(seasons, timePeriods);
+    public Result getLocations(@RequestParam(required = false) Integer[] seasons,
+                               @RequestParam(required = false, name = "season") Integer season,
+                               @RequestParam(required = false) Integer[] timePeriods,
+                               @RequestParam(required = false) Integer[] years) {
+        // 归一化参数：数组、多值与单值均支持
+        java.util.List<Integer> seasonList = new java.util.ArrayList<>();
+        if (seasons != null) {
+            for (Integer s : seasons) { if (s != null) seasonList.add(s); }
+        }
+        if (season != null) {
+            seasonList.add(season);
+        }
+
+        java.util.List<Integer> timePeriodList = new java.util.ArrayList<>();
+        if (timePeriods != null) {
+            for (Integer tp : timePeriods) { if (tp != null) timePeriodList.add(tp); }
+        }
+
+        java.util.List<Integer> yearList = new java.util.ArrayList<>();
+        if (years != null) {
+            for (Integer y : years) { if (y != null) yearList.add(y); }
+        }
+
+        log.info("/api/map/locations params -> seasons={}, timePeriods={}, years={}", seasonList, timePeriodList, yearList);
+
+        List<AddressCountDTO> locations = injuryRecordService.getLocationsBySeasonsAndTime(
+                seasonList.isEmpty() ? null : seasonList,
+                timePeriodList.isEmpty() ? null : timePeriodList,
+                yearList.isEmpty() ? null : yearList
+        );
         return Result.ok(locations);
     }
     /**
@@ -88,5 +115,38 @@ public class InjuryRecordController {
 //        // 参数校验省略
 //        return Result.ok(injuryRecordService.getLocationsBySeasonsAndTime(seasons, timePeriods));
 //    }
+
+    /**
+     * 获取24小时病例统计
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param startDate 开始日期（可选，格式：YYYY-MM-DD）
+     * @param endDate 结束日期（可选，格式：YYYY-MM-DD）
+     * @return 24小时统计数据
+     */
+    @GetMapping("/hourly-statistics")
+    public Result getHourlyStatistics(@RequestParam(required = false) Integer year,
+                                      @RequestParam(required = false) List<Integer> seasons,
+                                      @RequestParam(required = false, name = "season") Integer season,
+                                      @RequestParam(required = false) String startDate,
+                                      @RequestParam(required = false) String endDate) {
+        // 统一单选/多选入参：如果传了单个 season，合并到 seasons 列表中
+        if (season != null) {
+            if (seasons == null || seasons.isEmpty()) {
+                seasons = new java.util.ArrayList<>();
+            }
+            seasons.add(season);
+        }
+        List<HourlyStatisticsDTO> statistics = injuryRecordService.getHourlyStatistics(year, seasons, startDate, endDate);
+        return Result.ok(statistics);
+    }
+
+    /**
+     * 可用年份下拉
+     */
+    @GetMapping("/years")
+    public Result getAvailableYears() {
+        return Result.ok(injuryRecordService.getAvailableYears());
+    }
 
 }

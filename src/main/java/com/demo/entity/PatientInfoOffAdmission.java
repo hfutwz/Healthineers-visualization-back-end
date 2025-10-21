@@ -8,6 +8,28 @@ import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
 import java.io.Serializable;
+/**
+ * 建表语句
+ * CREATE TABLE patient_info_off_admission (
+ *     id INT AUTO_INCREMENT PRIMARY KEY,
+ *     patient_id INT NOT NULL,
+ *     temperature FLOAT COMMENT '体温',
+ *     respiratory_rate INT COMMENT '呼吸频率',
+ *     heart_rate INT COMMENT '心率',
+ *     systolic_bp INT COMMENT '血压高压',
+ *     diastolic_bp INT COMMENT '血压低压',
+ *     oxygen_saturation FLOAT COMMENT '指脉氧',
+ *     total_fluid_volume FLOAT COMMENT '总补液量',
+ *     saline_solution FLOAT COMMENT '生理盐水',
+ *     balanced_solution FLOAT COMMENT '平衡液',
+ *     artificial_colloid FLOAT COMMENT '人工胶体',
+ *     other_fluid varchar(255) COMMENT '其他补液',
+ *     urine_output FLOAT COMMENT '尿量',
+ *     other_drainage FLOAT COMMENT '其他引流量',
+ *     blood_loss varchar(255) COMMENT '出血量',
+ *     FOREIGN KEY (patient_id) REFERENCES patient(patient_id) ON DELETE CASCADE
+ * ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='患者离开时信息表';
+ */
 
 /**
  * 患者离室后信息表实体类

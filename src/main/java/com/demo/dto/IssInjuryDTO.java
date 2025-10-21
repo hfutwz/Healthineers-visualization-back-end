@@ -25,4 +25,39 @@ public class IssInjuryDTO {
      * service层计算，并填充0、1、2
      */
     private Integer injurySeverity;
+    
+    /**
+     * 头颈部详细伤情
+     */
+    private String headNeckDetails;
+    
+    /**
+     * 面部详细伤情
+     */
+    private String faceDetails;
+    
+    /**
+     * 胸部详细伤情
+     */
+    private String chestDetails;
+    
+    /**
+     * 腹部详细伤情
+     */
+    private String abdomenDetails;
+    
+    /**
+     * 四肢详细伤情
+     */
+    private String limbsDetails;
+    
+    /**
+     * 体表详细伤情
+     */
+    private String bodyDetails;
+    
+    /**
+     * 是否有详细伤情信息
+     */
+    private Boolean hasDetails;
 }

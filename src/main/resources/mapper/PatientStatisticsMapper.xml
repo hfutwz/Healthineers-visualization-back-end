@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.PatientStatisticsMapper">
+
+    <!-- 获取月度时间热力图数据 - 7x13矩阵（6个时间段+总和行，12个月+总和列） -->
+    <select id="getMonthlyTimeHeatmapData" resultType="java.util.Map">
+        SELECT 
+            time_period,
+            month,
+            patient_count
+        FROM (
+            -- 原始时间段数据
+            SELECT 
+                CASE 
+                    WHEN ir.time_period = 0 THEN 'night_0_7'
+                    WHEN ir.time_period = 1 THEN 'morning_rush_8_9'
+                    WHEN ir.time_period = 2 THEN 'lunch_rush_10_11'
+                    WHEN ir.time_period = 3 THEN 'afternoon_12_16'
+                    WHEN ir.time_period = 4 THEN 'evening_rush_17_19'
+                    WHEN ir.time_period = 5 THEN 'night_20_23'
+                    ELSE 'unknown'
+                END as time_period,
+                MONTH(ir.admission_date) as month,
+                COUNT(*) as patient_count
+            FROM InjuryRecord ir
+            WHERE 1=1
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            AND ir.time_period IS NOT NULL
+            GROUP BY 
+                CASE 
+                    WHEN ir.time_period = 0 THEN 'night_0_7'
+                    WHEN ir.time_period = 1 THEN 'morning_rush_8_9'
+                    WHEN ir.time_period = 2 THEN 'lunch_rush_10_11'
+                    WHEN ir.time_period = 3 THEN 'afternoon_12_16'
+                    WHEN ir.time_period = 4 THEN 'evening_rush_17_19'
+                    WHEN ir.time_period = 5 THEN 'night_20_23'
+                    ELSE 'unknown'
+                END,
+                MONTH(ir.admission_date)
+        ) t
+        ORDER BY 
+            CASE time_period
+                WHEN 'night_0_7' THEN 1
+                WHEN 'morning_rush_8_9' THEN 2
+                WHEN 'lunch_rush_10_11' THEN 3
+                WHEN 'afternoon_12_16' THEN 4
+                WHEN 'evening_rush_17_19' THEN 5
+                WHEN 'night_20_23' THEN 6
+                WHEN 'total' THEN 7
+                ELSE 8
+            END,
+            month
+    </select>
+
+    <!-- 获取创伤部位分析数据 -->
+    <select id="getInjuryAnalysisData" resultType="java.util.Map">
+        SELECT 
+            ir.injury_location as injury_site,
+            COUNT(*) as patient_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND ir.injury_location IS NOT NULL AND ir.injury_location != ''
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        GROUP BY ir.injury_location
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+    </select>
+
+    <!-- 获取ISS评分分布数据 -->
+    <select id="getISSScoreDistributionData" resultType="java.util.Map">
+        SELECT 
+            CASE 
+                WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN '0分'
+                WHEN iss.iss_score BETWEEN 1 AND 8 THEN '1-8分'
+                WHEN iss.iss_score BETWEEN 9 AND 15 THEN '9-15分'
+                WHEN iss.iss_score BETWEEN 16 AND 24 THEN '16-24分'
+                WHEN iss.iss_score &gt;= 25 THEN '25分以上'
+                ELSE '未知'
+            END as score_range,
+            COUNT(*) as patient_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY 
+            CASE 
+                WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN '0分'
+                WHEN iss.iss_score BETWEEN 1 AND 8 THEN '1-8分'
+                WHEN iss.iss_score BETWEEN 9 AND 15 THEN '9-15分'
+                WHEN iss.iss_score BETWEEN 16 AND 24 THEN '16-24分'
+                WHEN iss.iss_score &gt;= 25 THEN '25分以上'
+                ELSE '未知'
+            END
+        ORDER BY COUNT(*) DESC
+    </select>
+
+    <!-- 获取身体区域损伤数据 -->
+    <select id="getBodyRegionInjuryData" resultType="java.util.Map">
+        SELECT 
+            CASE 
+                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' THEN '头颈部'
+                WHEN iss.face IS NOT NULL AND iss.face != '' THEN '面部'
+                WHEN iss.chest IS NOT NULL AND iss.chest != '' THEN '胸部'
+                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' THEN '腹部'
+                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' THEN '四肢'
+                WHEN iss.body IS NOT NULL AND iss.body != '' THEN '体表'
+                ELSE '未知'
+            END as body_region,
+            COUNT(*) as injury_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY 
+            CASE 
+                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' THEN '头颈部'
+                WHEN iss.face IS NOT NULL AND iss.face != '' THEN '面部'
+                WHEN iss.chest IS NOT NULL AND iss.chest != '' THEN '胸部'
+                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' THEN '腹部'
+                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' THEN '四肢'
+                WHEN iss.body IS NOT NULL AND iss.body != '' THEN '体表'
+                ELSE '未知'
+            END
+        ORDER BY COUNT(*) DESC
+    </select>
+
+    <!-- 获取干预时间效率数据 -->
+    <select id="getInterventionTimeEfficiencyData" resultType="java.util.Map">
+        SELECT 
+            CASE 
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) IS NULL THEN '无数据'
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) &lt;= 30 THEN '30分钟以内'
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) &lt;= 60 THEN '31-60分钟'
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) &lt;= 120 THEN '61-120分钟'
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) &lt;= 240 THEN '121-240分钟'
+                ELSE '240分钟以上'
+            END as time_range,
+            COUNT(*) as patient_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        INNER JOIN interventiontime it ON ir.patient_id = it.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY 
+            CASE 
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) IS NULL THEN '无数据'
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) &lt;= 30 THEN '30分钟以内'
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) &lt;= 60 THEN '31-60分钟'
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) &lt;= 120 THEN '61-120分钟'
+                WHEN TIMESTAMPDIFF(MINUTE, 
+                    STR_TO_DATE(CONCAT(ir.admission_date, ' ', ir.admission_time), '%Y-%m-%d %H%i'), 
+                    STR_TO_DATE(CONCAT(it.leave_surgery_date, ' ', it.leave_surgery_time), '%Y-%m-%d %H%i')) &lt;= 240 THEN '121-240分钟'
+                ELSE '240分钟以上'
+            END
+        ORDER BY COUNT(*) DESC
+    </select>
+
+    <!-- 获取患者流向数据 -->
+    <select id="getPatientFlowData" resultType="java.util.Map">
+        SELECT 
+            it.patient_destination as destination,
+            COUNT(*) as patient_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        INNER JOIN interventiontime it ON ir.patient_id = it.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND it.patient_destination IS NOT NULL AND it.patient_destination != ''
+        GROUP BY it.patient_destination
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+    </select>
+
+    <!-- 获取伤因分布数据 - 12个月x5种伤因 -->
+    <select id="getInjuryCauseDistributionData" resultType="java.util.Map">
+        SELECT 
+            MONTH(ir.admission_date) as month,
+            ir.injury_cause_category,
+            COUNT(*) as patient_count
+        FROM InjuryRecord ir
+        WHERE 1=1
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="season != null and season != '' and season != 'all'">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null and timePeriod != '' and timePeriod != 'all'">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        AND ir.injury_cause_category IS NOT NULL
+        GROUP BY MONTH(ir.admission_date), ir.injury_cause_category
+        ORDER BY MONTH(ir.admission_date), ir.injury_cause_category
+    </select>
+
+    <!-- 获取ISS分布数据（轻、中、重度） -->
+    <select id="getISSDistributionData" resultType="java.util.Map">
+        SELECT 
+            CASE 
+                WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 'light'
+                WHEN iss.iss_score BETWEEN 1 AND 8 THEN 'light'
+                WHEN iss.iss_score BETWEEN 9 AND 15 THEN 'moderate'
+                WHEN iss.iss_score >= 16 THEN 'severe'
+                ELSE 'light'
+            END as severity_level,
+            COUNT(*) as patient_count
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE 1=1
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null and year != ''">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null and season != '' and season != 'all'">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null and timePeriod != '' and timePeriod != 'all'">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        GROUP BY 
+            CASE 
+                WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 'light'
+                WHEN iss.iss_score BETWEEN 1 AND 8 THEN 'light'
+                WHEN iss.iss_score BETWEEN 9 AND 15 THEN 'moderate'
+                WHEN iss.iss_score >= 16 THEN 'severe'
+                ELSE 'light'
+            END
+        ORDER BY 
+            CASE 
+                WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 'light'
+                WHEN iss.iss_score BETWEEN 1 AND 8 THEN 'light'
+                WHEN iss.iss_score BETWEEN 9 AND 15 THEN 'moderate'
+                WHEN iss.iss_score >= 16 THEN 'severe'
+                ELSE 'light'
+            END
+    </select>
+
+</mapper>

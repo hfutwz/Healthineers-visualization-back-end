@@ -141,6 +141,63 @@
         ORDER BY COUNT(*) DESC
     </select>
 
+    <!-- 获取身体区域损伤旭日图数据 -->
+    <select id="getBodyRegionSunburstData" resultType="java.util.Map">
+        SELECT 
+            ir.season,
+            ir.time_period,
+            CASE 
+                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0' THEN 'head_neck'
+                WHEN iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0' THEN 'face'
+                WHEN iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0' THEN 'chest'
+                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0' THEN 'abdomen'
+                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0' THEN 'limbs'
+                WHEN iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0' THEN 'body'
+                ELSE 'unknown'
+            END as body_region,
+            CASE 
+                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0' THEN iss.head_neck
+                WHEN iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0' THEN iss.face
+                WHEN iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0' THEN iss.chest
+                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0' THEN iss.abdomen
+                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0' THEN iss.limbs
+                WHEN iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0' THEN iss.body
+                ELSE '0'
+            END as severity_level,
+            COUNT(*) as injury_count
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        GROUP BY 
+            ir.season,
+            ir.time_period,
+            CASE 
+                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0' THEN 'head_neck'
+                WHEN iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0' THEN 'face'
+                WHEN iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0' THEN 'chest'
+                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0' THEN 'abdomen'
+                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0' THEN 'limbs'
+                WHEN iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0' THEN 'body'
+                ELSE 'unknown'
+            END,
+            CASE 
+                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0' THEN iss.head_neck
+                WHEN iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0' THEN iss.face
+                WHEN iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0' THEN iss.chest
+                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0' THEN iss.abdomen
+                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0' THEN iss.limbs
+                WHEN iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0' THEN iss.body
+                ELSE '0'
+            END
+        ORDER BY injury_count DESC
+    </select>
+
     <!-- 获取干预时间效率数据 -->
     <select id="getInterventionTimeEfficiencyData" resultType="java.util.Map">
         SELECT 
@@ -218,10 +275,10 @@
         <if test="startDate != null and endDate != null">
             AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
         </if>
-        <if test="season != null and season != '' and season != 'all'">
+        <if test="season != null">
             AND ir.season = #{season}
         </if>
-        <if test="timePeriod != null and timePeriod != '' and timePeriod != 'all'">
+        <if test="timePeriod != null">
             AND ir.time_period = #{timePeriod}
         </if>
         AND ir.injury_cause_category IS NOT NULL
@@ -229,14 +286,14 @@
         ORDER BY MONTH(ir.admission_date), ir.injury_cause_category
     </select>
 
-    <!-- 获取ISS分布数据（轻、中、重度） -->
+    <!-- 获取ISS分布数据（轻伤、重伤、严重伤） -->
     <select id="getISSDistributionData" resultType="java.util.Map">
         SELECT 
             CASE 
                 WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 'light'
-                WHEN iss.iss_score BETWEEN 1 AND 8 THEN 'light'
-                WHEN iss.iss_score BETWEEN 9 AND 15 THEN 'moderate'
-                WHEN iss.iss_score >= 16 THEN 'severe'
+                WHEN iss.iss_score BETWEEN 1 AND 16 THEN 'light'
+                WHEN iss.iss_score BETWEEN 17 AND 25 THEN 'severe'
+                WHEN iss.iss_score > 25 THEN 'critical'
                 ELSE 'light'
             END as severity_level,
             COUNT(*) as patient_count
@@ -246,31 +303,116 @@
         <if test="startDate != null and endDate != null">
             AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
         </if>
-        <if test="year != null and year != ''">
+        <if test="year != null">
             AND YEAR(ir.admission_date) = #{year}
         </if>
-        <if test="season != null and season != '' and season != 'all'">
+        <if test="season != null">
             AND ir.season = #{season}
         </if>
-        <if test="timePeriod != null and timePeriod != '' and timePeriod != 'all'">
+        <if test="timePeriod != null">
             AND ir.time_period = #{timePeriod}
         </if>
         GROUP BY 
             CASE 
                 WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 'light'
-                WHEN iss.iss_score BETWEEN 1 AND 8 THEN 'light'
-                WHEN iss.iss_score BETWEEN 9 AND 15 THEN 'moderate'
-                WHEN iss.iss_score >= 16 THEN 'severe'
+                WHEN iss.iss_score BETWEEN 1 AND 16 THEN 'light'
+                WHEN iss.iss_score BETWEEN 17 AND 25 THEN 'severe'
+                WHEN iss.iss_score > 25 THEN 'critical'
                 ELSE 'light'
             END
         ORDER BY 
             CASE 
                 WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 'light'
-                WHEN iss.iss_score BETWEEN 1 AND 8 THEN 'light'
-                WHEN iss.iss_score BETWEEN 9 AND 15 THEN 'moderate'
-                WHEN iss.iss_score >= 16 THEN 'severe'
+                WHEN iss.iss_score BETWEEN 1 AND 16 THEN 'light'
+                WHEN iss.iss_score BETWEEN 17 AND 25 THEN 'severe'
+                WHEN iss.iss_score > 25 THEN 'critical'
                 ELSE 'light'
             END
+    </select>
+
+    <!-- 获取GCS分布数据 -->
+    <select id="getGCSDistributionData" resultType="java.util.Map">
+        SELECT 
+            level,
+            count
+        FROM (
+            SELECT 
+                CASE 
+                    WHEN gcs.total_score = 15 THEN '15'
+                    WHEN gcs.total_score BETWEEN 12 AND 14 THEN '12-14'
+                    WHEN gcs.total_score BETWEEN 9 AND 11 THEN '9-11'
+                    WHEN gcs.total_score BETWEEN 3 AND 8 THEN '3-8'
+                    ELSE 'unknown'
+                END as level,
+                COUNT(*) as count
+            FROM gcs_score gcs
+            INNER JOIN patient p ON gcs.patient_id = p.patient_id
+            INNER JOIN interventiontime i ON p.patient_id = i.patient_id
+            INNER JOIN injuryrecord ir ON p.patient_id = ir.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            AND gcs.total_score IS NOT NULL
+            GROUP BY 
+                CASE 
+                    WHEN gcs.total_score = 15 THEN '15'
+                    WHEN gcs.total_score BETWEEN 12 AND 14 THEN '12-14'
+                    WHEN gcs.total_score BETWEEN 9 AND 11 THEN '9-11'
+                    WHEN gcs.total_score BETWEEN 3 AND 8 THEN '3-8'
+                    ELSE 'unknown'
+                END
+        ) t
+        ORDER BY 
+            CASE level
+                WHEN '15' THEN 1
+                WHEN '12-14' THEN 2
+                WHEN '9-11' THEN 3
+                WHEN '3-8' THEN 4
+                ELSE 5
+            END
+    </select>
+
+    <!-- 获取RTS分布数据 -->
+    <select id="getRTSDistributionData" resultType="java.util.Map">
+        SELECT 
+            CAST(total_score AS CHAR) as score,
+            COUNT(*) as count
+        FROM (
+            SELECT 
+                (rts.gcs_score + rts.sbp_score + rts.rr_score) as total_score
+            FROM rts_score rts
+            INNER JOIN patient p ON rts.patient_id = p.patient_id
+            INNER JOIN interventiontime i ON p.patient_id = i.patient_id
+            INNER JOIN injuryrecord ir ON p.patient_id = ir.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            AND rts.gcs_score IS NOT NULL 
+            AND rts.sbp_score IS NOT NULL 
+            AND rts.rr_score IS NOT NULL
+        ) t
+        GROUP BY total_score
+        ORDER BY total_score DESC
     </select>
 
 </mapper>

@@ -98,6 +98,19 @@ public interface PatientStatisticsMapper {
     List<Map<String, Object>> getBodyRegionInjuryData(@Param("startDate") String startDate, @Param("endDate") String endDate);
     
     /**
+     * 获取身体区域损伤旭日图数据
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @param startDate 开始日期
+     * @param endDate 结束日期
+     * @return 身体区域损伤旭日图数据
+     */
+    List<Map<String, Object>> getBodyRegionSunburstData(@Param("season") Integer season,
+                                                         @Param("timePeriod") Integer timePeriod,
+                                                         @Param("startDate") String startDate,
+                                                         @Param("endDate") String endDate);
+    
+    /**
      * 获取干预时间效率数据
      * @param startDate 开始日期
      * @param endDate 结束日期
@@ -127,4 +140,49 @@ public interface PatientStatisticsMapper {
                                                              @Param("endDate") String endDate,
                                                              @Param("season") Integer season,
                                                              @Param("timePeriod") Integer timePeriod);
+    
+    /**
+     * 获取ISS分布数据（轻伤、重伤、严重伤）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return ISS分布数据
+     */
+    List<Map<String, Object>> getISSDistributionData(@Param("startDate") String startDate,
+                                                     @Param("endDate") String endDate,
+                                                     @Param("year") Integer year,
+                                                     @Param("season") Integer season,
+                                                     @Param("timePeriod") Integer timePeriod);
+    
+    /**
+     * 获取GCS分布数据（意识清楚、轻度意识障碍、中度意识障碍、昏迷）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return GCS分布数据
+     */
+    List<Map<String, Object>> getGCSDistributionData(@Param("startDate") String startDate,
+                                                      @Param("endDate") String endDate,
+                                                      @Param("year") Integer year,
+                                                      @Param("season") Integer season,
+                                                      @Param("timePeriod") Integer timePeriod);
+    
+    /**
+     * 获取RTS分布数据（0-4分）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return RTS分布数据
+     */
+    List<Map<String, Object>> getRTSDistributionData(@Param("startDate") String startDate,
+                                                      @Param("endDate") String endDate,
+                                                      @Param("year") Integer year,
+                                                      @Param("season") Integer season,
+                                                      @Param("timePeriod") Integer timePeriod);
 }

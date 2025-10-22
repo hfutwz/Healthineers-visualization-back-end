@@ -56,6 +56,16 @@ public interface IPatientStatisticsService {
     List<Map<String, Object>> getBodyRegionInjuryData(String startDate, String endDate);
     
     /**
+     * 获取身体区域损伤旭日图数据
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @return 身体区域损伤旭日图数据
+     */
+    List<Map<String, Object>> getBodyRegionSunburstData(Integer season, Integer timePeriod, String startDate, String endDate);
+    
+    /**
      * 获取干预时间效率数据
      * @param startDate 开始日期（可选）
      * @param endDate 结束日期（可选）
@@ -81,4 +91,37 @@ public interface IPatientStatisticsService {
      * @return 伤因分布数据
      */
     List<Map<String, Object>> getInjuryCauseDistributionData(Integer year, String startDate, String endDate, Integer season, Integer timePeriod);
+    
+    /**
+     * 获取ISS分布数据（轻伤、重伤、严重伤）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return ISS分布数据
+     */
+    List<Map<String, Object>> getISSDistributionData(String startDate, String endDate, Integer year, Integer season, Integer timePeriod);
+    
+    /**
+     * 获取GCS评分分布数据（意识清楚、轻度意识障碍、中度意识障碍、昏迷）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return GCS分布数据
+     */
+    List<Map<String, Object>> getGCSDistributionData(String startDate, String endDate, Integer year, Integer season, Integer timePeriod);
+    
+    /**
+     * 获取RTS评分分布数据（0-4分）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return RTS分布数据
+     */
+    List<Map<String, Object>> getRTSDistributionData(String startDate, String endDate, Integer year, Integer season, Integer timePeriod);
 }

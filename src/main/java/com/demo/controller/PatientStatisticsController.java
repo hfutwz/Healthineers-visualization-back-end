@@ -14,6 +14,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/patient-statistics")
+@CrossOrigin(origins = "*")
 public class PatientStatisticsController {
     
     @Autowired
@@ -120,6 +121,28 @@ public class PatientStatisticsController {
     }
     
     /**
+     * 获取身体区域损伤旭日图数据
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @return 身体区域损伤旭日图数据
+     */
+    @GetMapping("/body-region-sunburst")
+    public Result getBodyRegionSunburstData(@RequestParam(required = false) Integer season,
+                                          @RequestParam(required = false) Integer timePeriod,
+                                          @RequestParam(required = false) String startDate,
+                                          @RequestParam(required = false) String endDate) {
+        try {
+            List<Map<String, Object>> sunburstData = patientStatisticsService.getBodyRegionSunburstData(season, timePeriod, startDate, endDate);
+            return Result.ok(sunburstData);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.fail("获取身体区域损伤旭日图数据失败：" + e.getMessage());
+        }
+    }
+    
+    /**
      * 获取干预时间效率数据
      * @param startDate 开始日期（可选）
      * @param endDate 结束日期（可选）
@@ -168,14 +191,106 @@ public class PatientStatisticsController {
     public Result getInjuryCauseDistributionData(@RequestParam(required = false) Integer year,
                                                 @RequestParam(required = false) String startDate,
                                                 @RequestParam(required = false) String endDate,
-                                                @RequestParam(required = false) Integer season,
-                                                @RequestParam(required = false) Integer timePeriod) {
+                                                @RequestParam(required = false) String season,
+                                                @RequestParam(required = false) String timePeriod) {
         try {
-            List<Map<String, Object>> distributionData = patientStatisticsService.getInjuryCauseDistributionData(year, startDate, endDate, season, timePeriod);
+            // 处理季节参数
+            Integer seasonInt = null;
+            if (season != null && !season.equals("all") && !season.isEmpty()) {
+                try {
+                    seasonInt = Integer.parseInt(season);
+                } catch (NumberFormatException e) {
+                    // 如果转换失败，保持为null
+                }
+            }
+            
+            // 处理时间段参数
+            Integer timePeriodInt = null;
+            if (timePeriod != null && !timePeriod.equals("all") && !timePeriod.isEmpty()) {
+                try {
+                    timePeriodInt = Integer.parseInt(timePeriod);
+                } catch (NumberFormatException e) {
+                    // 如果转换失败，保持为null
+                }
+            }
+            
+            List<Map<String, Object>> distributionData = patientStatisticsService.getInjuryCauseDistributionData(year, startDate, endDate, seasonInt, timePeriodInt);
             return Result.ok(distributionData);
         } catch (Exception e) {
             e.printStackTrace();
             return Result.fail("获取伤因分布数据失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取ISS分布数据（轻伤、重伤、严重伤）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return ISS分布数据
+     */
+    @GetMapping("/iss-distribution")
+    public Result getISSDistributionData(@RequestParam(required = false) String startDate,
+                                        @RequestParam(required = false) String endDate,
+                                        @RequestParam(required = false) Integer year,
+                                        @RequestParam(required = false) Integer season,
+                                        @RequestParam(required = false) Integer timePeriod) {
+        try {
+            List<Map<String, Object>> distributionData = patientStatisticsService.getISSDistributionData(startDate, endDate, year, season, timePeriod);
+            return Result.ok(distributionData);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.fail("获取ISS分布数据失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取GCS分布数据（意识清楚、轻度意识障碍、中度意识障碍、昏迷）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return GCS分布数据
+     */
+    @GetMapping("/gcs-distribution")
+    public Result getGCSDistributionData(@RequestParam(required = false) String startDate,
+                                        @RequestParam(required = false) String endDate,
+                                        @RequestParam(required = false) Integer year,
+                                        @RequestParam(required = false) Integer season,
+                                        @RequestParam(required = false) Integer timePeriod) {
+        try {
+            List<Map<String, Object>> distributionData = patientStatisticsService.getGCSDistributionData(startDate, endDate, year, season, timePeriod);
+            return Result.ok(distributionData);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.fail("获取GCS分布数据失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取RTS分布数据（0-4分）
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @return RTS分布数据
+     */
+    @GetMapping("/rts-distribution")
+    public Result getRTSDistributionData(@RequestParam(required = false) String startDate,
+                                        @RequestParam(required = false) String endDate,
+                                        @RequestParam(required = false) Integer year,
+                                        @RequestParam(required = false) Integer season,
+                                        @RequestParam(required = false) Integer timePeriod) {
+        try {
+            List<Map<String, Object>> distributionData = patientStatisticsService.getRTSDistributionData(startDate, endDate, year, season, timePeriod);
+            return Result.ok(distributionData);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.fail("获取RTS分布数据失败：" + e.getMessage());
         }
     }
 }

@@ -126,15 +126,17 @@ public class PatientStatisticsController {
      * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
      * @param startDate 开始日期（可选）
      * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
      * @return 身体区域损伤旭日图数据
      */
     @GetMapping("/body-region-sunburst")
     public Result getBodyRegionSunburstData(@RequestParam(required = false) Integer season,
                                           @RequestParam(required = false) Integer timePeriod,
                                           @RequestParam(required = false) String startDate,
-                                          @RequestParam(required = false) String endDate) {
+                                          @RequestParam(required = false) String endDate,
+                                          @RequestParam(required = false) Integer year) {
         try {
-            List<Map<String, Object>> sunburstData = patientStatisticsService.getBodyRegionSunburstData(season, timePeriod, startDate, endDate);
+            List<Map<String, Object>> sunburstData = patientStatisticsService.getBodyRegionSunburstData(season, timePeriod, startDate, endDate, year);
             return Result.ok(sunburstData);
         } catch (Exception e) {
             e.printStackTrace();
@@ -291,6 +293,36 @@ public class PatientStatisticsController {
         } catch (Exception e) {
             e.printStackTrace();
             return Result.fail("获取RTS分布数据失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取人群身体热力图数据
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @param ageGroup 年龄组（可选，0-儿童，1-青年，2-中年，3-老年）
+     * @param gender 性别（可选，0-男，1-女）
+     * @param severity 严重程度（可选，0-轻伤，1-重伤，2-严重伤）
+     * @return 人群身体热力图数据
+     */
+    @GetMapping("/population-body-heatmap")
+    public Result getPopulationBodyHeatmapData(@RequestParam(required = false) String startDate,
+                                             @RequestParam(required = false) String endDate,
+                                             @RequestParam(required = false) Integer year,
+                                             @RequestParam(required = false) Integer season,
+                                             @RequestParam(required = false) Integer timePeriod,
+                                             @RequestParam(required = false) Integer ageGroup,
+                                             @RequestParam(required = false) Integer gender,
+                                             @RequestParam(required = false) Integer severity) {
+        try {
+            List<Map<String, Object>> heatmapData = patientStatisticsService.getPopulationBodyHeatmapData(startDate, endDate, year, season, timePeriod, ageGroup, gender, severity);
+            return Result.ok(heatmapData);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.fail("获取人群身体热力图数据失败：" + e.getMessage());
         }
     }
 }

@@ -221,16 +221,21 @@ public class PatientStatisticsServiceImpl implements IPatientStatisticsService {
     }
     
     @Override
-    public List<Map<String, Object>> getBodyRegionSunburstData(Integer season, Integer timePeriod, String startDate, String endDate) {
-        // 如果没有指定日期范围，使用默认范围（最近一年）
-        if (startDate == null || endDate == null) {
+    public List<Map<String, Object>> getBodyRegionSunburstData(Integer season, Integer timePeriod, String startDate, String endDate, Integer year) {
+        // 如果指定了年份但没有指定具体日期范围，使用该年份的完整范围
+        if ((startDate == null || endDate == null) && year != null) {
+            startDate = year + "-01-01";
+            endDate = year + "-12-31";
+        }
+        // 如果没有指定日期范围且没有指定年份，使用默认范围（最近一年）
+        else if (startDate == null || endDate == null) {
             LocalDate end = LocalDate.now();
             LocalDate start = end.minusYears(1);
             startDate = start.format(DateTimeFormatter.ISO_LOCAL_DATE);
             endDate = end.format(DateTimeFormatter.ISO_LOCAL_DATE);
         }
         
-        return patientStatisticsMapper.getBodyRegionSunburstData(season, timePeriod, startDate, endDate);
+        return patientStatisticsMapper.getBodyRegionSunburstData(season, timePeriod, startDate, endDate, year);
     }
     
     @Override
@@ -548,5 +553,23 @@ public class PatientStatisticsServiceImpl implements IPatientStatisticsService {
         }
         
         return result;
+    }
+    
+    @Override
+    public List<Map<String, Object>> getPopulationBodyHeatmapData(String startDate, String endDate, Integer year, Integer season, Integer timePeriod, Integer ageGroup, Integer gender, Integer severity) {
+        // 如果指定了年份但没有指定具体日期范围，使用该年份的完整范围
+        if ((startDate == null || endDate == null) && year != null) {
+            startDate = year + "-01-01";
+            endDate = year + "-12-31";
+        }
+        // 如果没有指定日期范围且没有指定年份，使用默认范围（最近一年）
+        else if (startDate == null || endDate == null) {
+            LocalDate end = LocalDate.now();
+            LocalDate start = end.minusYears(1);
+            startDate = start.format(DateTimeFormatter.ISO_LOCAL_DATE);
+            endDate = end.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        }
+        
+        return patientStatisticsMapper.getPopulationBodyHeatmapData(startDate, endDate, year, season, timePeriod, ageGroup, gender, severity);
     }
 }

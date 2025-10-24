@@ -61,9 +61,10 @@ public interface IPatientStatisticsService {
      * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
      * @param startDate 开始日期（可选）
      * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
      * @return 身体区域损伤旭日图数据
      */
-    List<Map<String, Object>> getBodyRegionSunburstData(Integer season, Integer timePeriod, String startDate, String endDate);
+    List<Map<String, Object>> getBodyRegionSunburstData(Integer season, Integer timePeriod, String startDate, String endDate, Integer year);
     
     /**
      * 获取干预时间效率数据
@@ -124,4 +125,18 @@ public interface IPatientStatisticsService {
      * @return RTS分布数据
      */
     List<Map<String, Object>> getRTSDistributionData(String startDate, String endDate, Integer year, Integer season, Integer timePeriod);
+    
+    /**
+     * 获取人群身体热力图数据
+     * @param startDate 开始日期（可选）
+     * @param endDate 结束日期（可选）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
+     * @param ageGroup 年龄组（可选，0-儿童，1-青年，2-中年，3-老年）
+     * @param gender 性别（可选，0-男，1-女）
+     * @param severity 严重程度（可选，0-轻伤，1-重伤，2-严重伤）
+     * @return 人群身体热力图数据
+     */
+    List<Map<String, Object>> getPopulationBodyHeatmapData(String startDate, String endDate, Integer year, Integer season, Integer timePeriod, Integer ageGroup, Integer gender, Integer severity);
 }

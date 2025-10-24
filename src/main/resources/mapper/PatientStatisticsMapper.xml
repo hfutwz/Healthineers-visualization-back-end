@@ -144,58 +144,130 @@
     <!-- 获取身体区域损伤旭日图数据 -->
     <select id="getBodyRegionSunburstData" resultType="java.util.Map">
         SELECT 
-            ir.season,
-            ir.time_period,
-            CASE 
-                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0' THEN 'head_neck'
-                WHEN iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0' THEN 'face'
-                WHEN iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0' THEN 'chest'
-                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0' THEN 'abdomen'
-                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0' THEN 'limbs'
-                WHEN iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0' THEN 'body'
-                ELSE 'unknown'
-            END as body_region,
-            CASE 
-                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0' THEN iss.head_neck
-                WHEN iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0' THEN iss.face
-                WHEN iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0' THEN iss.chest
-                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0' THEN iss.abdomen
-                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0' THEN iss.limbs
-                WHEN iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0' THEN iss.body
-                ELSE '0'
-            END as severity_level,
+            'head_neck' as body_region,
+            iss.head_neck as severity_level,
             COUNT(*) as injury_count
         FROM InjuryRecord ir
         INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
         WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0'
         <if test="season != null">
             AND ir.season = #{season}
         </if>
         <if test="timePeriod != null">
             AND ir.time_period = #{timePeriod}
         </if>
-        GROUP BY 
-            ir.season,
-            ir.time_period,
-            CASE 
-                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0' THEN 'head_neck'
-                WHEN iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0' THEN 'face'
-                WHEN iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0' THEN 'chest'
-                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0' THEN 'abdomen'
-                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0' THEN 'limbs'
-                WHEN iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0' THEN 'body'
-                ELSE 'unknown'
-            END,
-            CASE 
-                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0' THEN iss.head_neck
-                WHEN iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0' THEN iss.face
-                WHEN iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0' THEN iss.chest
-                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0' THEN iss.abdomen
-                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0' THEN iss.limbs
-                WHEN iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0' THEN iss.body
-                ELSE '0'
-            END
-        ORDER BY injury_count DESC
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        GROUP BY iss.head_neck
+        
+        UNION ALL
+        
+        SELECT 
+            'face' as body_region,
+            iss.face as severity_level,
+            COUNT(*) as injury_count
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0'
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        GROUP BY iss.face
+        
+        UNION ALL
+        
+        SELECT 
+            'chest' as body_region,
+            iss.chest as severity_level,
+            COUNT(*) as injury_count
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0'
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        GROUP BY iss.chest
+        
+        UNION ALL
+        
+        SELECT 
+            'abdomen' as body_region,
+            iss.abdomen as severity_level,
+            COUNT(*) as injury_count
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0'
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        GROUP BY iss.abdomen
+        
+        UNION ALL
+        
+        SELECT 
+            'limbs' as body_region,
+            iss.limbs as severity_level,
+            COUNT(*) as injury_count
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0'
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        GROUP BY iss.limbs
+        
+        UNION ALL
+        
+        SELECT 
+            'body' as body_region,
+            iss.body as severity_level,
+            COUNT(*) as injury_count
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0'
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        GROUP BY iss.body
+        
+        ORDER BY body_region, severity_level
     </select>
 
     <!-- 获取干预时间效率数据 -->
@@ -413,6 +485,333 @@
         ) t
         GROUP BY total_score
         ORDER BY total_score DESC
+    </select>
+
+    <!-- 获取人群身体热力图数据 -->
+    <select id="getPopulationBodyHeatmapData" resultType="java.util.Map">
+        SELECT 
+            body_part,
+            AVG(severity_value) as average_severity,
+            COUNT(DISTINCT patient_id) as patient_count
+        FROM (
+            SELECT 
+                'head_neck' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.head_neck LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.head_neck AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.head_neck IS NOT NULL 
+            AND iss.head_neck != '0' 
+            AND iss.head_neck != ''
+            AND (
+                CASE 
+                    WHEN iss.head_neck LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.head_neck AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'face' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.face LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.face AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.face IS NOT NULL 
+            AND iss.face != '0' 
+            AND iss.face != ''
+            AND (
+                CASE 
+                    WHEN iss.face LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.face AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'chest' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.chest LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.chest AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.chest IS NOT NULL 
+            AND iss.chest != '0' 
+            AND iss.chest != ''
+            AND (
+                CASE 
+                    WHEN iss.chest LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.chest AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'abdomen' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.abdomen LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.abdomen AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.abdomen IS NOT NULL 
+            AND iss.abdomen != '0' 
+            AND iss.abdomen != ''
+            AND (
+                CASE 
+                    WHEN iss.abdomen LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.abdomen AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'limbs' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.limbs LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.limbs AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.limbs IS NOT NULL 
+            AND iss.limbs != '0' 
+            AND iss.limbs != ''
+            AND (
+                CASE 
+                    WHEN iss.limbs LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.limbs AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'body' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.body LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.body AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.body IS NOT NULL 
+            AND iss.body != '0' 
+            AND iss.body != ''
+            AND (
+                CASE 
+                    WHEN iss.body LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.body AS DECIMAL(3,1))
+                END
+            ) > 0
+        ) body_parts_data
+        GROUP BY body_part
+        ORDER BY body_part
     </select>
 
 </mapper>

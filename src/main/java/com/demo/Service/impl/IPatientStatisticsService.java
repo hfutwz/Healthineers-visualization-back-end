@@ -14,9 +14,12 @@ public interface IPatientStatisticsService {
      * 获取患者统计数据
      * @param startDate 开始日期（可选，格式：YYYY-MM-DD）
      * @param endDate 结束日期（可选，格式：YYYY-MM-DD）
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
      * @return 患者统计数据
      */
-    PatientStatisticsDTO getPatientStatistics(String startDate, String endDate);
+    PatientStatisticsDTO getPatientStatistics(String startDate, String endDate, Integer year, Integer season, Integer timePeriod);
     
     /**
      * 获取月度时间热力图数据

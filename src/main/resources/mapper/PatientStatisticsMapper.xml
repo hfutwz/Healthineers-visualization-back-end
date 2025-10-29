@@ -814,4 +814,63 @@
         ORDER BY body_part
     </select>
 
+    <!-- 获取总患者数量 - 支持四个维度筛选 -->
+    <select id="getTotalPatients" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT p.patient_id) 
+        FROM patient p 
+        INNER JOIN interventiontime i ON p.patient_id = i.patient_id
+        INNER JOIN injuryrecord ir ON p.patient_id = ir.patient_id
+        WHERE i.admission_date BETWEEN #{startDate} AND #{endDate}
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+    </select>
+
+    <!-- 获取平均干预时间（分钟） - 支持四个维度筛选 -->
+    <select id="getAverageInterventionTime" resultType="java.lang.Double">
+        SELECT AVG(TIMESTAMPDIFF(MINUTE, 
+            STR_TO_DATE(CONCAT(i.admission_date, ' ', i.admission_time), '%Y-%m-%d %H%i'), 
+            STR_TO_DATE(CONCAT(i.leave_surgery_date, ' ', i.leave_surgery_time), '%Y-%m-%d %H%i'))) 
+        FROM interventiontime i 
+        INNER JOIN injuryrecord ir ON i.patient_id = ir.patient_id
+        WHERE i.admission_date BETWEEN #{startDate} AND #{endDate} 
+        AND i.leave_surgery_date IS NOT NULL AND i.leave_surgery_time IS NOT NULL
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+    </select>
+
+    <!-- 获取救治成功率（百分比） - 支持四个维度筛选 -->
+    <select id="getSuccessRate" resultType="java.lang.Double">
+        SELECT 
+            CASE 
+                WHEN COUNT(*) = 0 THEN 0 
+                ELSE (COUNT(CASE WHEN i.death = '否' OR i.death IS NULL THEN 1 END) * 100.0 / COUNT(*)) 
+            END 
+        FROM interventiontime i 
+        INNER JOIN injuryrecord ir ON i.patient_id = ir.patient_id
+        WHERE i.admission_date BETWEEN #{startDate} AND #{endDate}
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+    </select>
+
 </mapper>

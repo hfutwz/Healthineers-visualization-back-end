@@ -2,7 +2,6 @@ package com.demo.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
 import java.util.Map;
@@ -17,41 +16,46 @@ public interface PatientStatisticsMapper {
      * 获取总患者数量
      * @param startDate 开始日期
      * @param endDate 结束日期
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
      * @return 总患者数量
      */
-    @Select("SELECT COUNT(DISTINCT p.patient_id) FROM patient p " +
-            "INNER JOIN interventiontime i ON p.patient_id = i.patient_id " +
-            "WHERE i.admission_date BETWEEN #{startDate} AND #{endDate}")
-    Long getTotalPatients(@Param("startDate") String startDate, @Param("endDate") String endDate);
+    Long getTotalPatients(@Param("startDate") String startDate, 
+                         @Param("endDate") String endDate,
+                         @Param("year") Integer year,
+                         @Param("season") Integer season,
+                         @Param("timePeriod") Integer timePeriod);
     
     /**
      * 获取平均干预时间（分钟）
      * @param startDate 开始日期
      * @param endDate 结束日期
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
      * @return 平均干预时间
      */
-    @Select("SELECT AVG(TIMESTAMPDIFF(MINUTE, " +
-            "STR_TO_DATE(CONCAT(i.admission_date, ' ', i.admission_time), '%Y-%m-%d %H%i'), " +
-            "STR_TO_DATE(CONCAT(i.leave_surgery_date, ' ', i.leave_surgery_time), '%Y-%m-%d %H%i'))) " +
-            "FROM interventiontime i " +
-            "WHERE i.admission_date BETWEEN #{startDate} AND #{endDate} " +
-            "AND i.leave_surgery_date IS NOT NULL AND i.leave_surgery_time IS NOT NULL")
-    Double getAverageInterventionTime(@Param("startDate") String startDate, @Param("endDate") String endDate);
+    Double getAverageInterventionTime(@Param("startDate") String startDate, 
+                                     @Param("endDate") String endDate,
+                                     @Param("year") Integer year,
+                                     @Param("season") Integer season,
+                                     @Param("timePeriod") Integer timePeriod);
     
     /**
      * 获取救治成功率（百分比）
      * @param startDate 开始日期
      * @param endDate 结束日期
+     * @param year 年份（可选）
+     * @param season 季节（可选，0-春季，1-夏季，2-秋季，3-冬季）
+     * @param timePeriod 时间段（可选，0-夜间，1-早高峰，2-午高峰，3-下午，4-晚高峰，5-晚上）
      * @return 救治成功率
      */
-    @Select("SELECT " +
-            "CASE " +
-            "WHEN COUNT(*) = 0 THEN 0 " +
-            "ELSE (COUNT(CASE WHEN i.death = '否' OR i.death IS NULL THEN 1 END) * 100.0 / COUNT(*)) " +
-            "END " +
-            "FROM interventiontime i " +
-            "WHERE i.admission_date BETWEEN #{startDate} AND #{endDate}")
-    Double getSuccessRate(@Param("startDate") String startDate, @Param("endDate") String endDate);
+    Double getSuccessRate(@Param("startDate") String startDate, 
+                         @Param("endDate") String endDate,
+                         @Param("year") Integer year,
+                         @Param("season") Integer season,
+                         @Param("timePeriod") Integer timePeriod);
     
     /**
      * 获取月度时间热力图数据

@@ -24,7 +24,7 @@ public class PatientStatisticsServiceImpl implements IPatientStatisticsService {
     private PatientStatisticsMapper patientStatisticsMapper;
     
     @Override
-    public PatientStatisticsDTO getPatientStatistics(String startDate, String endDate) {
+    public PatientStatisticsDTO getPatientStatistics(String startDate, String endDate, Integer year, Integer season, Integer timePeriod) {
         // 如果没有指定日期范围，使用默认范围（最近一年）
         if (startDate == null || endDate == null) {
             LocalDate end = LocalDate.now();
@@ -38,10 +38,10 @@ public class PatientStatisticsServiceImpl implements IPatientStatisticsService {
         LocalDate end = LocalDate.parse(endDate);
         long totalDays = ChronoUnit.DAYS.between(start, end) + 1;
         
-        // 获取统计数据
-        Long totalPatients = patientStatisticsMapper.getTotalPatients(startDate, endDate);
-        Double averageInterventionTime = patientStatisticsMapper.getAverageInterventionTime(startDate, endDate);
-        Double successRate = patientStatisticsMapper.getSuccessRate(startDate, endDate);
+        // 获取统计数据 - 现在支持四个维度的筛选
+        Long totalPatients = patientStatisticsMapper.getTotalPatients(startDate, endDate, year, season, timePeriod);
+        Double averageInterventionTime = patientStatisticsMapper.getAverageInterventionTime(startDate, endDate, year, season, timePeriod);
+        Double successRate = patientStatisticsMapper.getSuccessRate(startDate, endDate, year, season, timePeriod);
         
         // 计算日均患者数
         Double averagePatientsPerDay = totalPatients != null && totalDays > 0 ? 

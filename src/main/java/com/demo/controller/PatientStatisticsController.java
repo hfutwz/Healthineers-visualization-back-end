@@ -24,13 +24,53 @@ public class PatientStatisticsController {
      * 获取患者统计数据
      * @param startDate 开始日期（可选，格式：YYYY-MM-DD）
      * @param endDate 结束日期（可选，格式：YYYY-MM-DD）
+     * @param year 年份（可选）
+     * @param season 季节（可选，spring-春季，summer-夏季，autumn-秋季，winter-冬季）
+     * @param timePeriod 时间段（可选，night-夜间，morning_peak-早高峰，noon_peak-午高峰，afternoon-下午，evening_peak-晚高峰，evening-晚上）
      * @return 患者统计数据
      */
     @GetMapping("/statistics")
     public Result getPatientStatistics(@RequestParam(required = false) String startDate,
-                                      @RequestParam(required = false) String endDate) {
+                                      @RequestParam(required = false) String endDate,
+                                      @RequestParam(required = false) String year,
+                                      @RequestParam(required = false) String season,
+                                      @RequestParam(required = false) String timePeriod) {
         try {
-            PatientStatisticsDTO statistics = patientStatisticsService.getPatientStatistics(startDate, endDate);
+            // 处理年份参数
+            Integer yearInt = null;
+            if (year != null && !year.equals("all") && !year.isEmpty()) {
+                try {
+                    yearInt = Integer.parseInt(year);
+                } catch (NumberFormatException e) {
+                    // 如果转换失败，保持为null
+                }
+            }
+            
+            // 处理季节参数
+            Integer seasonInt = null;
+            if (season != null && !season.equals("all") && !season.isEmpty()) {
+                switch (season) {
+                    case "spring": seasonInt = 0; break;
+                    case "summer": seasonInt = 1; break;
+                    case "autumn": seasonInt = 2; break;
+                    case "winter": seasonInt = 3; break;
+                }
+            }
+            
+            // 处理时间段参数
+            Integer timePeriodInt = null;
+            if (timePeriod != null && !timePeriod.equals("all") && !timePeriod.isEmpty()) {
+                switch (timePeriod) {
+                    case "night": timePeriodInt = 0; break;
+                    case "morning_peak": timePeriodInt = 1; break;
+                    case "noon_peak": timePeriodInt = 2; break;
+                    case "afternoon": timePeriodInt = 3; break;
+                    case "evening_peak": timePeriodInt = 4; break;
+                    case "evening": timePeriodInt = 5; break;
+                }
+            }
+            
+            PatientStatisticsDTO statistics = patientStatisticsService.getPatientStatistics(startDate, endDate, yearInt, seasonInt, timePeriodInt);
             return Result.ok(statistics);
         } catch (Exception e) {
             e.printStackTrace();

@@ -18,17 +18,25 @@ import java.util.List;
 public class InjuryRecordController {
     @Autowired
     private IInjuryRecordService injuryRecordService;
-
     /**
-     * 查看系统中全部时间的地点
+     * 根据季节和时间段查询地点
+     *      * 前端请求
+     *      * GET /api/map/locations
+     *      * {
+     *      *   "seasons": [0,2],       //  可选，0：春 2：秋
+     *      *   "timePeriods": [3],     // 可选，空列表 为全天
+     *      * }
+     * @param seasons
+     * @param timePeriods
      * @return
      */
-    @GetMapping("/alltime")
-    public Object getAllLocations() {
-        List<AddressCountDTO> allLocations = injuryRecordService.getAllLocations();
-        return Result.ok(allLocations);
+    @GetMapping("/locations")
+    public Result getLocations(@RequestParam(required = false) List<Integer> seasons,
+                               @RequestParam(required = false) List<Integer> timePeriods) {
+        // 这里调用service
+        List<AddressCountDTO> locations = injuryRecordService.getLocationsBySeasonsAndTime(seasons, timePeriods);
+        return Result.ok(locations);
     }
-
     /**
      * 根据日期查询地点
      *      * 前端请求
@@ -50,25 +58,35 @@ public class InjuryRecordController {
         log.error("seasons = " + startDate.toString() + ",    timePeriods = " + endDate.toString());
         return Result.ok(injuryRecordService.getLocationsByTimeRange(startDate, endDate, timePeriods));
     }
+//    /**
+//     * 查看系统中全部时间的地点
+//     * @return
+//     */
+//    @GetMapping("/alltime")
+//    public Object getAllLocations() {
+//        List<AddressCountDTO> allLocations = injuryRecordService.getAllLocations();
+//        return Result.ok(allLocations);
+//    }
 
-    /**
-     * 根据季节和时间段查询地点
-     *      * 前端请求
-     *      * GET /api/map/season-time-filtered
-     *      * {
-     *      *   "seasons": [0,2],   //  必须传递，0：春 2：秋
-     *      *   "timePeriods": [3], // // 可选，空列表 为全天
-     *      * }
-     * @param seasons
-     * @param timePeriods
-     * @return
-     */
-    @GetMapping("/season-time-filtered")
-    public Result getLocationsBySeasonsAndTime(@RequestParam List<Integer> seasons,
-                                               @RequestParam(required = false) List<Integer> timePeriods) {
-        // 打印接受的请求参数
-        log.error("seasons = " + seasons.toString() + ",    timePeriods = " + timePeriods.toString());
-        // 参数校验省略
-        return Result.ok(injuryRecordService.getLocationsBySeasonsAndTime(seasons, timePeriods));
-    }
+//    /**
+//     * 根据季节和时间段查询地点
+//     *      * 前端请求
+//     *      * GET /api/map/season-time-filtered
+//     *      * {
+//     *      *   "seasons": [0,2],   //  必须传递，0：春 2：秋
+//     *      *   "timePeriods": [3], // // 可选，空列表 为全天
+//     *      * }
+//     * @param seasons
+//     * @param timePeriods
+//     * @return
+//     */
+//    @GetMapping("/season-time-filtered")
+//    public Result getLocationsBySeasonsAndTime(@RequestParam List<Integer> seasons,
+//                                               @RequestParam(required = false) List<Integer> timePeriods) {
+//        // 打印接受的请求参数
+//        log.error("seasons = " + seasons.toString() + ",    timePeriods = " + timePeriods.toString());
+//        // 参数校验省略
+//        return Result.ok(injuryRecordService.getLocationsBySeasonsAndTime(seasons, timePeriods));
+//    }
+
 }

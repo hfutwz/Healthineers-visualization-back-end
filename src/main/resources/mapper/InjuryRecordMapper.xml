@@ -25,11 +25,14 @@
     <select id="selectLocationsBySeasonsAndTime" parameterType="map" resultType="com.demo.dto.AddressCountDTO">
         SELECT latitude, longitude, COUNT(*) as count
         FROM injuryrecord
-        WHERE season IN
-        <foreach collection="seasons" item="s" open="(" separator="," close=")">
-            #{s}
-        </foreach>
-        <if test="timePeriods != null and size() > 0">
+        WHERE 1=1
+        <if test="seasons != null and seasons.size() > 0">
+            AND season IN
+            <foreach collection="seasons" item="s" open="(" separator="," close=")">
+                #{s}
+            </foreach>
+        </if>
+        <if test="timePeriods != null and timePeriods.size() > 0">
             AND (time_period IN
             <foreach collection="timePeriods" item="tp" open="(" separator="," close=")">
                 #{tp}

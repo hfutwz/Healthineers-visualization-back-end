@@ -564,7 +564,7 @@ public class RtsScoreImportService {
     // vscode git_project1 测试合并是否报错
     public Map<String, Object> testGit2(String excelFilePath) {
         // 返回一个模拟结果
-        System.out.println("ddd");
+        System.out.println("cccddd");
         return new HashMap<String, Object>() {};
     }
 }

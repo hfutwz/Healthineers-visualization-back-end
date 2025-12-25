@@ -251,5 +251,18 @@ public class ComprehensiveDataImportService {
         
         return result;
     }
+
+    // 写一个模拟方法
+    public Map<String, Object> testGit(String excelFilePath) {
+        // 返回一个模拟结果
+        System.out.println("aaa");
+        return new HashMap<String, Object>() {};
+    }
+    // 写一个模拟方法
+    public Map<String, Object> testGit2(String excelFilePath) {
+        // 返回一个模拟结果
+        System.out.println("bbb");
+        return new HashMap<String, Object>() {};
+    }
 }
 

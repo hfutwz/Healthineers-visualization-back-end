@@ -1,0 +1,22 @@
+# Java编译产物（核心，解决.class文件冲突的关键）
+target/
+*.class
+
+# IDE配置文件（可选，避免IDE配置干扰）
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Maven/Gradle相关（可选）
+.mvn/
+mvnw
+mvnw.cmd
+gradle/
+gradlew
+gradlew.bat
+
+# 日志/临时文件（可选）
+*.log
+*.tmp
+*.bak

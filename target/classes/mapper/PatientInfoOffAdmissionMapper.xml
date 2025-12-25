@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.PatientInfoOffAdmissionMapper">
+
+    <!-- 根据患者ID查询离室后信息（如果有多条记录，返回最新的一条） -->
+    <select id="selectByPatientId" parameterType="java.lang.Integer" resultType="com.demo.entity.PatientInfoOffAdmission">
+        SELECT * FROM patient_info_off_admission WHERE patient_id = #{patientId} ORDER BY id DESC LIMIT 1
+    </select>
+
+</mapper>

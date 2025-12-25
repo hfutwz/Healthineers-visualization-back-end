@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.demo.mapper.PatientInjuryDetailMapper">
+
+    <select id="selectInjuryDetailsByPatientIdAndBodyPart" resultType="com.demo.dto.InjuryDetailDTO">
+        SELECT 
+            it.injury_type_id AS injuryTypeId,
+            it.injury_name AS injuryName,
+            it.injury_description AS injuryDescription,
+            it.score_value AS scoreValue,
+            pid.injury_count AS injuryCount,
+            pid.notes AS notes
+        FROM patient_injury_details pid
+        INNER JOIN injury_types it ON pid.injury_type_id = it.injury_type_id
+        WHERE pid.patient_id = #{patientId} 
+        AND it.body_part = #{bodyPart}
+        AND it.is_active = TRUE
+        ORDER BY it.score_value DESC, it.injury_name
+    </select>
+
+</mapper>

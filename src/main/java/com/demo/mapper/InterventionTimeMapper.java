@@ -13,4 +13,12 @@ public interface InterventionTimeMapper extends BaseMapper<InterventionTime> {
     // 自定义查询：根据患者ID查询干预时间
     @Select("SELECT * FROM interventiontime WHERE patient_id = #{patientId}")
     List<InterventionTime> selectByPatientId(Integer patientId);
+    
+    // 根据患者ID查询单条干预时间记录（用于编辑回显）
+    @Select("SELECT * FROM interventiontime WHERE patient_id = #{patientId} LIMIT 1")
+    InterventionTime selectOneByPatientId(Integer patientId);
+    
+    // 查询所有干预时间数据
+    @Select("SELECT * FROM interventiontime")
+    List<InterventionTime> selectAll();
 }

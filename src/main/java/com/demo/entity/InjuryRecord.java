@@ -1,6 +1,7 @@
 package com.demo.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -12,23 +13,26 @@ import java.time.LocalDate;
 
 /**
  * 建表语句
- * CREATE TABLE InjuryRecord (
- *     injury_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '病例ID',
- *     patient_id INT NOT NULL COMMENT '患者ID',
- *     admission_date DATE NOT NULL COMMENT '接诊日期',
- *     season TINYINT DEFAULT NULL COMMENT '季节',
- *     admission_time VARCHAR(4) NOT NULL COMMENT '接诊时间',
- *     time_period TINYINT DEFAULT NULL COMMENT '时间段',
- *     arrival_method VARCHAR(50) NOT NULL COMMENT '来院方式',
- *     injury_location_desc VARCHAR(255) NOT NULL COMMENT '创伤发生地点描述',
- *     longitude DECIMAL(9,6) DEFAULT NULL COMMENT '经度',
- *     latitude DECIMAL(9,6) DEFAULT NULL COMMENT '纬度',
- *     -- 添加索引
- *     INDEX idx_log_lat_time (longitude, latitude, time_period),
- *     INDEX idx_log_lat_season (longitude, latitude, season),
- *     -- 添加外键约束
- *     CONSTRAINT fk_patient FOREIGN KEY (patient_id) REFERENCES Patient(patient_id)
- * ) COMMENT='创伤病例详细信息';
+ CREATE TABLE InjuryRecord (
+ injury_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '病例id（主键）',
+ patient_id INT NOT NULL COMMENT '患者id（外键）',
+ admission_date DATE COMMENT '接诊日期',
+ season TINYINT COMMENT '季节（0-春季，1-夏季，2-秋季，3-冬季）',
+ admission_time VARCHAR(4) COMMENT '接诊时间（四位数字格式，如1100）',
+ time_period TINYINT COMMENT '时间段（0夜间0-7，1早高峰8-9，2午高峰10-11，3下午12-17，4晚高峰17-19，5晚上20-23',
+ arrival_method VARCHAR(100) COMMENT '来院方式',
+ injury_location VARCHAR(500) COMMENT '创伤发生地',
+ longitude DECIMAL(10, 7) COMMENT '经度',
+ latitude DECIMAL(10, 7) COMMENT '纬度',
+ station_name VARCHAR(200) COMMENT '120分站站点名称',
+ injury_cause_category TINYINT COMMENT '受伤原因分类（0-交通伤，1-高坠伤，2-机械伤，3-跌倒，4-其他）',
+ injury_cause_detail VARCHAR(200) COMMENT '受伤原因具体描述（如：爆炸伤、玻璃划伤等）',
+ FOREIGN KEY (patient_id) REFERENCES patient(patient_id),
+ INDEX idx_injury_cause_category (injury_cause_category),
+ INDEX idx_season (season),
+ INDEX idx_time_period (time_period)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='病例发生记录表';
+
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
@@ -60,12 +64,12 @@ public class InjuryRecord implements Serializable {
     private String admissionTime;
     /**
      * 时间段
-     * 0：夜间 19:00-7:00
-     * 1：早高峰 7:00-9:00
-     * 2：早晨  9:00-11:00
-     * 3：午高峰 11:00-13:00
-     * 4：下午  13:00-17:00
-     * 5：晚高峰 17:00-19:00
+     * 0：夜间      00：00-07:59
+     * 1：早高峰    8:00-9:59
+     * 2：午高峰    10:00-11:59
+     * 3：下午      12:00-16:59
+     * 4：晚高峰    17:00-19:59
+     * 5：晚上     20:00-23:59
      */
     private Integer timePeriod;
     /**
@@ -75,6 +79,7 @@ public class InjuryRecord implements Serializable {
     /**
      * 创伤发生地点描述
      */
+    @TableField("injury_location")
     private String injuryLocationDesc;
     /**
      * 经度
@@ -84,34 +89,20 @@ public class InjuryRecord implements Serializable {
      * 纬度
      */
     private Double latitude;
+    /**
+     * 120分站站点名称
+     */
+    @TableField("station_name")
+    private String stationName;
+    /**
+     * 受伤原因分类（0-交通伤，1-高坠伤，2-机械伤，3-跌倒，4-其他）
+     */
+    @TableField("injury_cause_category")
+    private Integer injuryCauseCategory;
+    /**
+     * 受伤原因具体描述（如：爆炸伤、玻璃划伤等）
+     */
+    @TableField("injury_cause_detail")
+    private String injuryCauseDetail;
 
 }
-/**
- * 建表语句
- * CREATE TABLE InterventionTime (
- *     intervention_id INT AUTO_INCREMENT PRIMARY KEY COMMENT '干预方式ID',
- *     patient_id INT NOT NULL COMMENT '患者ID,外键',
- *     admission_date DATE NOT NULL COMMENT '接诊日期',
- *     admission_time VARCHAR(4) NOT NULL COMMENT '接诊时间',
- *     -- 各干预方式的时间点，存储为4位字符串（HHMM），为空表示无此干预
- *     peripheral VARCHAR(4) DEFAULT NULL COMMENT '外周',
- *     iv_line VARCHAR(4) DEFAULT NULL COMMENT '深静脉',
- *     central_access VARCHAR(4) DEFAULT NULL COMMENT '骨通道',
- *     nasal_pipe VARCHAR(4) DEFAULT NULL COMMENT '鼻导管',
- *     face_mask VARCHAR(4) DEFAULT NULL COMMENT '面罩',
- *     endotracheal_tube VARCHAR(4) DEFAULT NULL COMMENT '气管插管',
- *     ventilator VARCHAR(4) DEFAULT NULL COMMENT '呼吸机开始时间',
- *     cpr_start_time VARCHAR(4) DEFAULT NULL COMMENT '心肺复苏开始时间',
- *     cpr_end_time VARCHAR(4) DEFAULT NULL COMMENT '心肺复苏结束时间',
- *     ultrasound VARCHAR(4) DEFAULT NULL COMMENT 'B超',
- *     CT VARCHAR(4) DEFAULT NULL COMMENT 'CT',
- *     tourniquet VARCHAR(4) DEFAULT NULL COMMENT '止血带',
- *     blood_draw VARCHAR(4) DEFAULT NULL COMMENT '采血',
- *     catheter VARCHAR(4) DEFAULT NULL COMMENT '导尿',
- *     gastric_tube VARCHAR(4) DEFAULT NULL COMMENT '胃管',
- *     transfusion_start VARCHAR(4) DEFAULT NULL COMMENT '输血开始时间',
- *     transfusion_end VARCHAR(4) DEFAULT NULL COMMENT '输血结束时间',
- *     leave_surgery_time VARCHAR(4) DEFAULT NULL COMMENT '离开抢救室时间',
- *     CONSTRAINT fk_intervention_patient FOREIGN KEY (patient_id) REFERENCES Patient(patient_id) -- 假设患者表为Patients，外键关联
- *     )COMMENT='干预方式时间表';
- */

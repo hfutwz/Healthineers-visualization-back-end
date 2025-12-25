@@ -1,11 +1,23 @@
 server:
-  port: 8080
+  port: 9090
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  tomcat:
+    uri-encoding: UTF-8
+
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/healthineersvisualization?useSSL=false&serverTimezone=UTC
-    username: root
+    url: jdbc:mysql://localhost:3306/healthineersvisualization?useSSL=false&serverTimezone=UTC&useUnicode=true&characterEncoding=utf8&autoReconnect=true&failOverReadOnly=false&maxReconnects=10&useOldAliasMetadataBehavior=true
+    username: root1
     password: 123
     driver-class-name: com.mysql.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 5MB        # 单个文件最大大小
+      max-request-size: 50MB      # 整个请求最大大小
 
 mybatis-plus:
   type-aliases-package: com.demo.entity
@@ -14,3 +26,9 @@ mybatis-plus:
 logging:
   level:
     com.demo: debug
+
+# 高德地图API配置
+amap:
+  api:
+    key: a45594094ddabde9555f030599338cb9
+  city: 上海

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.RtsScoreMapper">
+
+    <!-- 根据患者ID查询RTS评分（如果有多条记录，返回最新的一条） -->
+    <select id="selectByPatientId" parameterType="java.lang.Integer" resultType="com.demo.entity.RtsScore">
+        SELECT * FROM rts_score WHERE patient_id = #{patientId} ORDER BY rts_id DESC LIMIT 1
+    </select>
+
+    <!-- 根据患者ID查询RTS评分及患者基本信息（如果有多条记录，返回最新的一条） -->
+    <select id="selectWithPatientInfo" parameterType="java.lang.Integer" resultType="com.demo.dto.RtsScoreWithPatientDTO">
+        SELECT 
+            r.rts_id as rtsId,
+            r.patient_id as patientId,
+            p.age as age,
+            p.gender as gender,
+            r.gcs_score as gcsScore,
+            r.sbp_score as sbpScore,
+            r.rr_score as rrScore,
+            (r.gcs_score + r.sbp_score + r.rr_score) as totalScore
+        FROM rts_score r
+        LEFT JOIN patient p ON r.patient_id = p.patient_id
+        WHERE r.patient_id = #{patientId}
+        ORDER BY r.rts_id DESC
+        LIMIT 1
+    </select>
+
+</mapper>

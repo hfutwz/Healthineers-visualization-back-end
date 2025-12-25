@@ -9,7 +9,7 @@ import java.net.URL;
 import java.time.LocalDate;
 
 public class ExtraFieldUtils {
-    private static final String API_KEY = "a45594094ddabde9555f030599338cb9";
+    private static final String API_KEY = "";
     /**
      * 获取季节
      * @param date

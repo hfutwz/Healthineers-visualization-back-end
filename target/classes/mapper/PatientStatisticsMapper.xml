@@ -1,0 +1,2241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.PatientStatisticsMapper">
+
+    <!-- 获取月度时间热力图数据 - 7x13矩阵（6个时间段+总和行，12个月+总和列） -->
+    <select id="getMonthlyTimeHeatmapData" resultType="java.util.Map">
+        SELECT 
+            time_period,
+            month,
+            patient_count
+        FROM (
+            -- 原始时间段数据
+            SELECT 
+                CASE 
+                    WHEN ir.time_period = 0 THEN 'night_0_7'
+                    WHEN ir.time_period = 1 THEN 'morning_rush_8_9'
+                    WHEN ir.time_period = 2 THEN 'lunch_rush_10_11'
+                    WHEN ir.time_period = 3 THEN 'afternoon_12_16'
+                    WHEN ir.time_period = 4 THEN 'evening_rush_17_19'
+                    WHEN ir.time_period = 5 THEN 'night_20_23'
+                    ELSE 'unknown'
+                END as time_period,
+                MONTH(ir.admission_date) as month,
+                COUNT(*) as patient_count
+            FROM InjuryRecord ir
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        -- 形如 HH:mm 或 H:mm 或 HH:mm:ss / H:mm:ss，转换为分钟数
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        -- 形如 HHmm（4位）或 Hmm（3位），转换为分钟数
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        -- 形如 HHmmss（6位），转换为分钟数
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        -- 仅小时（1-2位），转换为分钟数
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND ir.time_period IS NOT NULL
+            GROUP BY 
+                CASE 
+                    WHEN ir.time_period = 0 THEN 'night_0_7'
+                    WHEN ir.time_period = 1 THEN 'morning_rush_8_9'
+                    WHEN ir.time_period = 2 THEN 'lunch_rush_10_11'
+                    WHEN ir.time_period = 3 THEN 'afternoon_12_16'
+                    WHEN ir.time_period = 4 THEN 'evening_rush_17_19'
+                    WHEN ir.time_period = 5 THEN 'night_20_23'
+                    ELSE 'unknown'
+                END,
+                MONTH(ir.admission_date)
+        ) t
+        ORDER BY 
+            CASE time_period
+                WHEN 'night_0_7' THEN 1
+                WHEN 'morning_rush_8_9' THEN 2
+                WHEN 'lunch_rush_10_11' THEN 3
+                WHEN 'afternoon_12_16' THEN 4
+                WHEN 'evening_rush_17_19' THEN 5
+                WHEN 'night_20_23' THEN 6
+                WHEN 'total' THEN 7
+                ELSE 8
+            END,
+            month
+    </select>
+
+    <!-- 获取创伤部位分析数据 -->
+    <select id="getInjuryAnalysisData" resultType="java.util.Map">
+        SELECT 
+            ir.injury_location as injury_site,
+            COUNT(*) as patient_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND ir.injury_location IS NOT NULL AND ir.injury_location != ''
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        GROUP BY ir.injury_location
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+    </select>
+
+    <!-- 获取ISS评分分布数据 -->
+    <select id="getISSScoreDistributionData" resultType="java.util.Map">
+        SELECT 
+            CASE 
+                WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN '0分'
+                WHEN iss.iss_score BETWEEN 1 AND 8 THEN '1-8分'
+                WHEN iss.iss_score BETWEEN 9 AND 15 THEN '9-15分'
+                WHEN iss.iss_score BETWEEN 16 AND 24 THEN '16-24分'
+                WHEN iss.iss_score &gt;= 25 THEN '25分以上'
+                ELSE '未知'
+            END as score_range,
+            COUNT(*) as patient_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY 
+            CASE 
+                WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN '0分'
+                WHEN iss.iss_score BETWEEN 1 AND 8 THEN '1-8分'
+                WHEN iss.iss_score BETWEEN 9 AND 15 THEN '9-15分'
+                WHEN iss.iss_score BETWEEN 16 AND 24 THEN '16-24分'
+                WHEN iss.iss_score &gt;= 25 THEN '25分以上'
+                ELSE '未知'
+            END
+        ORDER BY COUNT(*) DESC
+    </select>
+
+    <!-- 获取身体区域损伤数据 -->
+    <select id="getBodyRegionInjuryData" resultType="java.util.Map">
+        SELECT 
+            CASE 
+                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' THEN '头颈部'
+                WHEN iss.face IS NOT NULL AND iss.face != '' THEN '面部'
+                WHEN iss.chest IS NOT NULL AND iss.chest != '' THEN '胸部'
+                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' THEN '腹部'
+                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' THEN '四肢'
+                WHEN iss.body IS NOT NULL AND iss.body != '' THEN '体表'
+                ELSE '未知'
+            END as body_region,
+            COUNT(*) as injury_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY 
+            CASE 
+                WHEN iss.head_neck IS NOT NULL AND iss.head_neck != '' THEN '头颈部'
+                WHEN iss.face IS NOT NULL AND iss.face != '' THEN '面部'
+                WHEN iss.chest IS NOT NULL AND iss.chest != '' THEN '胸部'
+                WHEN iss.abdomen IS NOT NULL AND iss.abdomen != '' THEN '腹部'
+                WHEN iss.limbs IS NOT NULL AND iss.limbs != '' THEN '四肢'
+                WHEN iss.body IS NOT NULL AND iss.body != '' THEN '体表'
+                ELSE '未知'
+            END
+        ORDER BY COUNT(*) DESC
+    </select>
+
+    <!-- 获取身体区域损伤旭日图数据 -->
+    <select id="getBodyRegionSunburstData" resultType="java.util.Map">
+        SELECT 
+            'head_neck' as body_region,
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END as severity_level,
+            COUNT(DISTINCT patient_id) as injury_count
+        FROM (
+            SELECT DISTINCT
+                ir.patient_id,
+                CASE 
+                    WHEN iss.head_neck LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.head_neck AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND iss.head_neck IS NOT NULL AND iss.head_neck != '' AND iss.head_neck != '0'
+            AND (
+                CASE 
+                    WHEN iss.head_neck LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.head_neck AS DECIMAL(3,1))
+                END
+            ) > 0
+        ) AS head_neck_data
+        WHERE severity_value IS NOT NULL
+        GROUP BY 
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END
+        
+        UNION ALL
+        
+        SELECT 
+            'face' as body_region,
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END as severity_level,
+            COUNT(DISTINCT patient_id) as injury_count
+        FROM (
+            SELECT DISTINCT
+                ir.patient_id,
+                CASE 
+                    WHEN iss.face LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.face AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND iss.face IS NOT NULL AND iss.face != '' AND iss.face != '0'
+            AND (
+                CASE 
+                    WHEN iss.face LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.face AS DECIMAL(3,1))
+                END
+            ) > 0
+        ) AS face_data
+        WHERE severity_value IS NOT NULL
+        GROUP BY 
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END
+        
+        UNION ALL
+        
+        SELECT 
+            'chest' as body_region,
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END as severity_level,
+            COUNT(DISTINCT patient_id) as injury_count
+        FROM (
+            SELECT DISTINCT
+                ir.patient_id,
+                CASE 
+                    WHEN iss.chest LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.chest AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND iss.chest IS NOT NULL AND iss.chest != '' AND iss.chest != '0'
+            AND (
+                CASE 
+                    WHEN iss.chest LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.chest AS DECIMAL(3,1))
+                END
+            ) > 0
+        ) AS chest_data
+        WHERE severity_value IS NOT NULL
+        GROUP BY 
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END
+        
+        UNION ALL
+        
+        SELECT 
+            'abdomen' as body_region,
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END as severity_level,
+            COUNT(DISTINCT patient_id) as injury_count
+        FROM (
+            SELECT DISTINCT
+                ir.patient_id,
+                CASE 
+                    WHEN iss.abdomen LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.abdomen AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND iss.abdomen IS NOT NULL AND iss.abdomen != '' AND iss.abdomen != '0'
+            AND (
+                CASE 
+                    WHEN iss.abdomen LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.abdomen AS DECIMAL(3,1))
+                END
+            ) > 0
+        ) AS abdomen_data
+        WHERE severity_value IS NOT NULL
+        GROUP BY 
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END
+        
+        UNION ALL
+        
+        SELECT 
+            'limbs' as body_region,
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END as severity_level,
+            COUNT(DISTINCT patient_id) as injury_count
+        FROM (
+            SELECT DISTINCT
+                ir.patient_id,
+                CASE 
+                    WHEN iss.limbs LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.limbs AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND iss.limbs IS NOT NULL AND iss.limbs != '' AND iss.limbs != '0'
+            AND (
+                CASE 
+                    WHEN iss.limbs LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.limbs AS DECIMAL(3,1))
+                END
+            ) > 0
+        ) AS limbs_data
+        WHERE severity_value IS NOT NULL
+        GROUP BY 
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END
+        
+        UNION ALL
+        
+        SELECT 
+            'body' as body_region,
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END as severity_level,
+            COUNT(DISTINCT patient_id) as injury_count
+        FROM (
+            SELECT DISTINCT
+                ir.patient_id,
+                CASE 
+                    WHEN iss.body LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.body AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND iss.body IS NOT NULL AND iss.body != '' AND iss.body != '0'
+            AND (
+                CASE 
+                    WHEN iss.body LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.body AS DECIMAL(3,1))
+                END
+            ) > 0
+        ) AS body_data
+        WHERE severity_value IS NOT NULL
+        GROUP BY 
+            CASE 
+                WHEN severity_value BETWEEN 1 AND 2 THEN 'mild'
+                WHEN severity_value = 3 THEN 'moderate'
+                WHEN severity_value BETWEEN 4 AND 5 THEN 'severe'
+                WHEN severity_value = 6 THEN 'critical'
+                ELSE NULL
+            END
+        
+        ORDER BY body_region, severity_level
+    </select>
+
+    <!-- 获取干预时间效率数据 - 返回原始时间数据，在Service层进行计算 -->
+    <!-- 说明：时间格式为4位字符串（如"2326"表示23:26），在Service层转换为"HH:MM"格式并计算 -->
+    <select id="getInterventionTimeEfficiencyData" resultType="com.demo.dto.InterventionTimeDTO">
+        SELECT 
+            it.patient_id as patientId,
+            it.admission_date as admissionDate,
+            it.admission_time as admissionTime,
+            it.leave_surgery_date as leaveSurgeryDate,
+            it.leave_surgery_time as leaveSurgeryTime
+        FROM InjuryRecord ir
+        INNER JOIN interventiontime it ON ir.patient_id = it.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+    </select>
+
+    <!-- 获取患者流向数据 -->
+    <select id="getPatientFlowData" resultType="java.util.Map">
+        SELECT 
+            it.patient_destination as destination,
+            COUNT(*) as patient_count,
+            ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM InjuryRecord WHERE admission_date BETWEEN #{startDate} AND #{endDate}), 2) as percentage
+        FROM InjuryRecord ir
+        INNER JOIN interventiontime it ON ir.patient_id = it.patient_id
+        WHERE ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        AND it.patient_destination IS NOT NULL AND it.patient_destination != ''
+        GROUP BY it.patient_destination
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+    </select>
+
+    <!-- 获取伤因分布数据 - 12个月x5种伤因 -->
+    <select id="getInjuryCauseDistributionData" resultType="java.util.Map">
+        SELECT 
+            MONTH(ir.admission_date) as month,
+            ir.injury_cause_category,
+            COUNT(*) as patient_count
+        FROM InjuryRecord ir
+        INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+        WHERE 1=1
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTime != null and customEndTime != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN 
+            (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+            AND
+            (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+        </if>
+        AND ir.injury_cause_category IS NOT NULL
+        GROUP BY MONTH(ir.admission_date), ir.injury_cause_category
+        ORDER BY MONTH(ir.admission_date), ir.injury_cause_category
+    </select>
+
+    <!-- 获取ISS分布数据 - 只查询原始数据，业务逻辑在Service层处理 -->
+    <!-- 注意：只计算有ISS评分的记录，NULL值不参与计算 -->
+    <select id="getISSDistributionData" resultType="java.util.Map">
+        SELECT 
+            ir.patient_id,
+            iss.iss_score,
+            ir.admission_date,
+            ir.season,
+            ir.time_period,
+            i.admission_time
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+        WHERE 1=1
+        AND iss.iss_score IS NOT NULL
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+    </select>
+
+    <!-- 获取GCS分布数据 -->
+    <select id="getGCSDistributionData" resultType="java.util.Map">
+        SELECT 
+            level,
+            count
+        FROM (
+            SELECT 
+                CASE 
+                    WHEN gcs.total_score = 15 THEN '15'
+                    WHEN gcs.total_score BETWEEN 12 AND 14 THEN '12-14'
+                    WHEN gcs.total_score BETWEEN 9 AND 11 THEN '9-11'
+                    WHEN gcs.total_score BETWEEN 3 AND 8 THEN '3-8'
+                    ELSE 'unknown'
+                END as level,
+                COUNT(DISTINCT gcs.patient_id) as count
+            FROM gcs_score gcs
+            INNER JOIN patient p ON gcs.patient_id = p.patient_id
+            INNER JOIN interventiontime i ON p.patient_id = i.patient_id
+            INNER JOIN injuryrecord ir ON p.patient_id = ir.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND gcs.total_score IS NOT NULL
+            GROUP BY 
+                CASE 
+                    WHEN gcs.total_score = 15 THEN '15'
+                    WHEN gcs.total_score BETWEEN 12 AND 14 THEN '12-14'
+                    WHEN gcs.total_score BETWEEN 9 AND 11 THEN '9-11'
+                    WHEN gcs.total_score BETWEEN 3 AND 8 THEN '3-8'
+                    ELSE 'unknown'
+                END
+        ) t
+        ORDER BY 
+            CASE level
+                WHEN '15' THEN 1
+                WHEN '12-14' THEN 2
+                WHEN '9-11' THEN 3
+                WHEN '3-8' THEN 4
+                ELSE 5
+            END
+    </select>
+
+    <!-- 获取RTS分布数据 -->
+    <select id="getRTSDistributionData" resultType="java.util.Map">
+        SELECT 
+            CAST(total_score AS CHAR) as score,
+            COUNT(DISTINCT t.patient_id) as count
+        FROM (
+            SELECT 
+                rts.patient_id,
+                (rts.gcs_score + rts.sbp_score + rts.rr_score) as total_score
+            FROM rts_score rts
+            INNER JOIN patient p ON rts.patient_id = p.patient_id
+            INNER JOIN interventiontime i ON p.patient_id = i.patient_id
+            INNER JOIN injuryrecord ir ON p.patient_id = ir.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            AND rts.gcs_score IS NOT NULL 
+            AND rts.sbp_score IS NOT NULL 
+            AND rts.rr_score IS NOT NULL
+        ) t
+        GROUP BY total_score
+        ORDER BY total_score DESC
+    </select>
+
+    <!-- 获取人群身体热力图数据 -->
+    <select id="getPopulationBodyHeatmapData" resultType="java.util.Map">
+        SELECT 
+            body_part,
+            AVG(severity_value) as average_severity,
+            COUNT(DISTINCT patient_id) as patient_count
+        FROM (
+            SELECT 
+                'head_neck' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.head_neck LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.head_neck AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.head_neck IS NOT NULL 
+            AND iss.head_neck != '0' 
+            AND iss.head_neck != ''
+            AND (
+                CASE 
+                    WHEN iss.head_neck LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.head_neck AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'face' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.face LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.face AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.face IS NOT NULL 
+            AND iss.face != '0' 
+            AND iss.face != ''
+            AND (
+                CASE 
+                    WHEN iss.face LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.face AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'chest' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.chest LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.chest AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.chest IS NOT NULL 
+            AND iss.chest != '0' 
+            AND iss.chest != ''
+            AND (
+                CASE 
+                    WHEN iss.chest LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.chest AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'abdomen' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.abdomen LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.abdomen AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.abdomen IS NOT NULL 
+            AND iss.abdomen != '0' 
+            AND iss.abdomen != ''
+            AND (
+                CASE 
+                    WHEN iss.abdomen LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.abdomen AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'limbs' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.limbs LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.limbs AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.limbs IS NOT NULL 
+            AND iss.limbs != '0' 
+            AND iss.limbs != ''
+            AND (
+                CASE 
+                    WHEN iss.limbs LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.limbs AS DECIMAL(3,1))
+                END
+            ) > 0
+            
+            UNION ALL
+            
+            SELECT 
+                'body' as body_part,
+                ir.patient_id,
+                CASE 
+                    WHEN iss.body LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.body AS DECIMAL(3,1))
+                END as severity_value
+            FROM InjuryRecord ir
+            INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+            INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+            WHERE 1=1
+            <if test="startDate != null and endDate != null">
+                AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+            <if test="year != null">
+                AND YEAR(ir.admission_date) = #{year}
+            </if>
+            <if test="season != null">
+                AND ir.season = #{season}
+            </if>
+            <if test="timePeriod != null">
+                AND ir.time_period = #{timePeriod}
+            </if>
+            <if test="customStartTime != null and customEndTime != null">
+                AND (
+                    CASE 
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                            CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                            CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                            CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                        WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                            CAST(i.admission_time AS UNSIGNED) * 60
+                        ELSE NULL
+                    END
+                ) BETWEEN 
+                (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+                AND
+                (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+            </if>
+            <if test="ageGroup != null">
+                AND ir.age_group = #{ageGroup}
+            </if>
+            <if test="gender != null">
+                AND ir.gender = #{gender}
+            </if>
+            <if test="severity != null">
+                AND CASE 
+                    WHEN iss.iss_score IS NULL OR iss.iss_score = 0 THEN 0
+                    WHEN iss.iss_score BETWEEN 1 AND 16 THEN 1
+                    WHEN iss.iss_score BETWEEN 17 AND 25 THEN 2
+                    WHEN iss.iss_score > 25 THEN 2
+                    ELSE 0
+                END = #{severity}
+            </if>
+            AND iss.body IS NOT NULL 
+            AND iss.body != '0' 
+            AND iss.body != ''
+            AND (
+                CASE 
+                    WHEN iss.body LIKE '%|%' THEN 
+                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                    ELSE 
+                        CAST(iss.body AS DECIMAL(3,1))
+                END
+            ) > 0
+        ) body_parts_data
+        GROUP BY body_part
+        ORDER BY body_part
+    </select>
+
+    <!-- 获取总患者数量 - 只做基本查询，时间转换在Service层处理 -->
+    <select id="getTotalPatients" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT p.patient_id) 
+        FROM patient p 
+        INNER JOIN interventiontime i ON p.patient_id = i.patient_id
+        INNER JOIN injuryrecord ir ON p.patient_id = ir.patient_id
+        WHERE 1=1
+        <if test="startDate != null and endDate != null">
+            AND i.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+    </select>
+
+    <!-- 获取平均干预时间（分钟） - 支持四个维度筛选 -->
+    <!-- 说明：返回原始时间数据，在Service层进行计算 -->
+    <select id="getAverageInterventionTime" resultType="com.demo.dto.InterventionTimeDTO">
+        SELECT 
+            i.patient_id as patientId,
+            i.admission_date as admissionDate,
+            i.admission_time as admissionTime,
+            i.leave_surgery_date as leaveSurgeryDate,
+            i.leave_surgery_time as leaveSurgeryTime
+        FROM interventiontime i 
+        INNER JOIN injuryrecord ir ON i.patient_id = ir.patient_id
+        WHERE 1=1
+        <if test="startDate != null and endDate != null">
+            AND i.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+    </select>
+
+    <!-- 获取死亡人数 - 支持四个维度筛选 -->
+    <!-- 注意：使用 death 字段（'是'/'否'）来判断死亡，不使用 is_dead 字段，因为 is_dead 字段可能存在数据不一致问题 -->
+    <select id="getDeathCount" resultType="java.lang.Long">
+        SELECT 
+            COUNT(CASE WHEN TRIM(i.death) = '是' THEN 1 END)
+        FROM interventiontime i 
+        INNER JOIN injuryrecord ir ON i.patient_id = ir.patient_id
+        WHERE 1=1
+        <if test="startDate != null and endDate != null">
+            AND i.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+    </select>
+
+    <!-- 获取死亡患者ID列表 - 支持四个维度筛选 -->
+    <select id="getDeathPatientIds" resultType="java.lang.Integer">
+        SELECT DISTINCT i.patient_id
+        FROM interventiontime i 
+        INNER JOIN injuryrecord ir ON i.patient_id = ir.patient_id
+        WHERE TRIM(i.death) = '是'
+        <if test="startDate != null and endDate != null">
+            AND i.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTime != null and customEndTime != null">
+            AND (
+                CASE 
+                    -- 形如 HH:mm 或 H:mm 或 HH:mm:ss / H:mm:ss，转换为分钟数
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    -- 形如 HHmm（4位）或 Hmm（3位），转换为分钟数
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    -- 形如 HHmmss（6位），转换为分钟数
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    -- 仅小时（1-2位），转换为分钟数
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN 
+            (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+            AND
+            (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+        </if>
+        ORDER BY i.patient_id
+    </select>
+
+    <!-- 获取最久远的接诊日期 - 支持年份、季节、时间段筛选 -->
+    <select id="getEarliestAdmissionDate" resultType="java.lang.String">
+        SELECT MIN(ir.admission_date) as earliest_date
+        FROM injuryrecord ir
+        WHERE 1=1
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        AND ir.admission_date IS NOT NULL
+    </select>
+
+    <!-- 根据伤因类型获取患者ID列表 - 支持时间段筛选 -->
+    <select id="getInjuryCausePatientIds" resultType="java.lang.Integer">
+        SELECT DISTINCT i.patient_id
+        FROM interventiontime i 
+        INNER JOIN injuryrecord ir ON i.patient_id = ir.patient_id
+        WHERE ir.injury_cause_category = #{injuryCauseCategory}
+        <if test="startDate != null and endDate != null">
+            AND i.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTime != null and customEndTime != null">
+            AND (
+                CASE 
+                    -- 形如 HH:mm 或 H:mm 或 HH:mm:ss / H:mm:ss，转换为分钟数
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    -- 形如 HHmm（4位）或 Hmm（3位），转换为分钟数
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    -- 形如 HHmmss（6位），转换为分钟数
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    -- 仅小时（1-2位），转换为分钟数
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN 
+            (CAST(SUBSTRING_INDEX(#{customStartTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customStartTime}, ':', -1) AS UNSIGNED))
+            AND
+            (CAST(SUBSTRING_INDEX(#{customEndTime}, ':', 1) AS UNSIGNED) * 60 + CAST(SUBSTRING_INDEX(#{customEndTime}, ':', -1) AS UNSIGNED))
+        </if>
+        ORDER BY i.patient_id
+    </select>
+
+    <!-- 根据ISS分段获取患者ID列表 - 支持四个维度筛选 -->
+    <!-- 注意：只计算有ISS评分的记录，NULL值不参与计算 -->
+    <!-- 与 getISSDistributionData 保持一致的查询逻辑和表别名 -->
+    <select id="getISSSegmentPatientIds" resultType="java.lang.Integer">
+        SELECT DISTINCT ir.patient_id
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+        WHERE 1=1
+        AND iss.iss_score IS NOT NULL
+        <if test="issSegment != null">
+            <choose>
+                <when test="issSegment.equals('light')">
+                    AND iss.iss_score &gt;= 0 AND iss.iss_score &lt;= 16
+                </when>
+                <when test="issSegment.equals('severe')">
+                    AND iss.iss_score &gt;= 17 AND iss.iss_score &lt;= 25
+                </when>
+                <when test="issSegment.equals('critical')">
+                    AND iss.iss_score &gt; 25
+                </when>
+            </choose>
+        </if>
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+        ORDER BY ir.patient_id
+    </select>
+
+    <!-- 根据GCS分段获取患者ID列表 -->
+    <!-- 与 getGCSDistributionData 保持一致的查询逻辑和表别名 -->
+    <select id="getGCSSegmentPatientIds" resultType="java.lang.Integer">
+        SELECT DISTINCT gcs.patient_id
+        FROM gcs_score gcs
+        INNER JOIN patient p ON gcs.patient_id = p.patient_id
+        INNER JOIN interventiontime i ON p.patient_id = i.patient_id
+        INNER JOIN injuryrecord ir ON p.patient_id = ir.patient_id
+        WHERE 1=1
+        AND gcs.total_score IS NOT NULL
+        <if test="gcsSegment != null">
+            <choose>
+                <when test="gcsSegment.equals('clear')">
+                    AND gcs.total_score = 15
+                </when>
+                <when test="gcsSegment.equals('mild')">
+                    AND gcs.total_score BETWEEN 12 AND 14
+                </when>
+                <when test="gcsSegment.equals('moderate')">
+                    AND gcs.total_score BETWEEN 9 AND 11
+                </when>
+                <when test="gcsSegment.equals('coma')">
+                    AND gcs.total_score BETWEEN 3 AND 8
+                </when>
+            </choose>
+        </if>
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+        ORDER BY gcs.patient_id
+    </select>
+
+    <!-- 获取RTS评分患者ID列表 -->
+    <select id="getRTSScorePatientIds" resultType="java.lang.Integer">
+        SELECT DISTINCT rts.patient_id
+        FROM rts_score rts
+        INNER JOIN patient p ON rts.patient_id = p.patient_id
+        INNER JOIN interventiontime i ON p.patient_id = i.patient_id
+        INNER JOIN injuryrecord ir ON p.patient_id = ir.patient_id
+        WHERE 1=1
+        AND rts.gcs_score IS NOT NULL 
+        AND rts.sbp_score IS NOT NULL 
+        AND rts.rr_score IS NOT NULL
+        <if test="rtsScore != null">
+            AND (rts.gcs_score + rts.sbp_score + rts.rr_score) = #{rtsScore}
+        </if>
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+        ORDER BY rts.patient_id
+    </select>
+
+    <!-- 获取身体部位患者ID列表 -->
+    <select id="getBodyPartPatientIds" resultType="java.lang.Integer">
+        SELECT DISTINCT ir.patient_id
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+        WHERE 1=1
+        <if test="bodyPart != null">
+            <choose>
+                <when test="bodyPart == 'head_neck'">
+                    AND iss.head_neck IS NOT NULL 
+                    AND iss.head_neck != '0' 
+                    AND iss.head_neck != ''
+                    AND (
+                        CASE 
+                            WHEN iss.head_neck LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.head_neck AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                </when>
+                <when test="bodyPart == 'face'">
+                    AND iss.face IS NOT NULL 
+                    AND iss.face != '0' 
+                    AND iss.face != ''
+                    AND (
+                        CASE 
+                            WHEN iss.face LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.face AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                </when>
+                <when test="bodyPart == 'chest'">
+                    AND iss.chest IS NOT NULL 
+                    AND iss.chest != '0' 
+                    AND iss.chest != ''
+                    AND (
+                        CASE 
+                            WHEN iss.chest LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.chest AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                </when>
+                <when test="bodyPart == 'abdomen'">
+                    AND iss.abdomen IS NOT NULL 
+                    AND iss.abdomen != '0' 
+                    AND iss.abdomen != ''
+                    AND (
+                        CASE 
+                            WHEN iss.abdomen LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.abdomen AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                </when>
+                <when test="bodyPart == 'limbs'">
+                    AND iss.limbs IS NOT NULL 
+                    AND iss.limbs != '0' 
+                    AND iss.limbs != ''
+                    AND (
+                        CASE 
+                            WHEN iss.limbs LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.limbs AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                </when>
+                <when test="bodyPart == 'body'">
+                    AND iss.body IS NOT NULL 
+                    AND iss.body != '0' 
+                    AND iss.body != ''
+                    AND (
+                        CASE 
+                            WHEN iss.body LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.body AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                </when>
+            </choose>
+        </if>
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+        ORDER BY ir.patient_id
+    </select>
+
+    <!-- 获取身体区域+严重程度患者ID列表 -->
+    <select id="getBodyRegionSeverityPatientIds" resultType="java.lang.Integer">
+        SELECT DISTINCT ir.patient_id
+        FROM InjuryRecord ir
+        INNER JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
+        INNER JOIN interventiontime i ON ir.patient_id = i.patient_id
+        WHERE 1=1
+        <if test="bodyRegion != null and severityLevel != null">
+            <choose>
+                <when test="bodyRegion == 'head_neck'">
+                    AND iss.head_neck IS NOT NULL 
+                    AND iss.head_neck != '0' 
+                    AND iss.head_neck != ''
+                    AND (
+                        CASE 
+                            WHEN iss.head_neck LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.head_neck AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                    <choose>
+                        <when test="severityLevel == 'mild'">
+                            AND (
+                                CASE 
+                                    WHEN iss.head_neck LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.head_neck AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 1 AND 2
+                        </when>
+                        <when test="severityLevel == 'moderate'">
+                            AND (
+                                CASE 
+                                    WHEN iss.head_neck LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.head_neck AS DECIMAL(3,1))
+                                END
+                            ) = 3
+                        </when>
+                        <when test="severityLevel == 'severe'">
+                            AND (
+                                CASE 
+                                    WHEN iss.head_neck LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.head_neck AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 4 AND 5
+                        </when>
+                        <when test="severityLevel == 'critical'">
+                            AND (
+                                CASE 
+                                    WHEN iss.head_neck LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.head_neck, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.head_neck AS DECIMAL(3,1))
+                                END
+                            ) = 6
+                        </when>
+                    </choose>
+                </when>
+                <when test="bodyRegion == 'face'">
+                    AND iss.face IS NOT NULL 
+                    AND iss.face != '0' 
+                    AND iss.face != ''
+                    AND (
+                        CASE 
+                            WHEN iss.face LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.face AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                    <choose>
+                        <when test="severityLevel == 'mild'">
+                            AND (
+                                CASE 
+                                    WHEN iss.face LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.face AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 1 AND 2
+                        </when>
+                        <when test="severityLevel == 'moderate'">
+                            AND (
+                                CASE 
+                                    WHEN iss.face LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.face AS DECIMAL(3,1))
+                                END
+                            ) = 3
+                        </when>
+                        <when test="severityLevel == 'severe'">
+                            AND (
+                                CASE 
+                                    WHEN iss.face LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.face AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 4 AND 5
+                        </when>
+                        <when test="severityLevel == 'critical'">
+                            AND (
+                                CASE 
+                                    WHEN iss.face LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.face, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.face AS DECIMAL(3,1))
+                                END
+                            ) = 6
+                        </when>
+                    </choose>
+                </when>
+                <when test="bodyRegion == 'chest'">
+                    AND iss.chest IS NOT NULL 
+                    AND iss.chest != '0' 
+                    AND iss.chest != ''
+                    AND (
+                        CASE 
+                            WHEN iss.chest LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.chest AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                    <choose>
+                        <when test="severityLevel == 'mild'">
+                            AND (
+                                CASE 
+                                    WHEN iss.chest LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.chest AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 1 AND 2
+                        </when>
+                        <when test="severityLevel == 'moderate'">
+                            AND (
+                                CASE 
+                                    WHEN iss.chest LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.chest AS DECIMAL(3,1))
+                                END
+                            ) = 3
+                        </when>
+                        <when test="severityLevel == 'severe'">
+                            AND (
+                                CASE 
+                                    WHEN iss.chest LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.chest AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 4 AND 5
+                        </when>
+                        <when test="severityLevel == 'critical'">
+                            AND (
+                                CASE 
+                                    WHEN iss.chest LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.chest, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.chest AS DECIMAL(3,1))
+                                END
+                            ) = 6
+                        </when>
+                    </choose>
+                </when>
+                <when test="bodyRegion == 'abdomen'">
+                    AND iss.abdomen IS NOT NULL 
+                    AND iss.abdomen != '0' 
+                    AND iss.abdomen != ''
+                    AND (
+                        CASE 
+                            WHEN iss.abdomen LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.abdomen AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                    <choose>
+                        <when test="severityLevel == 'mild'">
+                            AND (
+                                CASE 
+                                    WHEN iss.abdomen LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.abdomen AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 1 AND 2
+                        </when>
+                        <when test="severityLevel == 'moderate'">
+                            AND (
+                                CASE 
+                                    WHEN iss.abdomen LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.abdomen AS DECIMAL(3,1))
+                                END
+                            ) = 3
+                        </when>
+                        <when test="severityLevel == 'severe'">
+                            AND (
+                                CASE 
+                                    WHEN iss.abdomen LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.abdomen AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 4 AND 5
+                        </when>
+                        <when test="severityLevel == 'critical'">
+                            AND (
+                                CASE 
+                                    WHEN iss.abdomen LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.abdomen, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.abdomen AS DECIMAL(3,1))
+                                END
+                            ) = 6
+                        </when>
+                    </choose>
+                </when>
+                <when test="bodyRegion == 'limbs'">
+                    AND iss.limbs IS NOT NULL 
+                    AND iss.limbs != '0' 
+                    AND iss.limbs != ''
+                    AND (
+                        CASE 
+                            WHEN iss.limbs LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.limbs AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                    <choose>
+                        <when test="severityLevel == 'mild'">
+                            AND (
+                                CASE 
+                                    WHEN iss.limbs LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.limbs AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 1 AND 2
+                        </when>
+                        <when test="severityLevel == 'moderate'">
+                            AND (
+                                CASE 
+                                    WHEN iss.limbs LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.limbs AS DECIMAL(3,1))
+                                END
+                            ) = 3
+                        </when>
+                        <when test="severityLevel == 'severe'">
+                            AND (
+                                CASE 
+                                    WHEN iss.limbs LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.limbs AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 4 AND 5
+                        </when>
+                        <when test="severityLevel == 'critical'">
+                            AND (
+                                CASE 
+                                    WHEN iss.limbs LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.limbs, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.limbs AS DECIMAL(3,1))
+                                END
+                            ) = 6
+                        </when>
+                    </choose>
+                </when>
+                <when test="bodyRegion == 'body'">
+                    AND iss.body IS NOT NULL 
+                    AND iss.body != '0' 
+                    AND iss.body != ''
+                    AND (
+                        CASE 
+                            WHEN iss.body LIKE '%|%' THEN 
+                                CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                            ELSE 
+                                CAST(iss.body AS DECIMAL(3,1))
+                        END
+                    ) > 0
+                    <choose>
+                        <when test="severityLevel == 'mild'">
+                            AND (
+                                CASE 
+                                    WHEN iss.body LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.body AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 1 AND 2
+                        </when>
+                        <when test="severityLevel == 'moderate'">
+                            AND (
+                                CASE 
+                                    WHEN iss.body LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.body AS DECIMAL(3,1))
+                                END
+                            ) = 3
+                        </when>
+                        <when test="severityLevel == 'severe'">
+                            AND (
+                                CASE 
+                                    WHEN iss.body LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.body AS DECIMAL(3,1))
+                                END
+                            ) BETWEEN 4 AND 5
+                        </when>
+                        <when test="severityLevel == 'critical'">
+                            AND (
+                                CASE 
+                                    WHEN iss.body LIKE '%|%' THEN 
+                                        CAST(SUBSTRING_INDEX(iss.body, '|', -1) AS DECIMAL(3,1))
+                                    ELSE 
+                                        CAST(iss.body AS DECIMAL(3,1))
+                                END
+                            ) = 6
+                        </when>
+                    </choose>
+                </when>
+            </choose>
+        </if>
+        <if test="startDate != null and endDate != null">
+            AND ir.admission_date BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="year != null">
+            AND YEAR(ir.admission_date) = #{year}
+        </if>
+        <if test="season != null">
+            AND ir.season = #{season}
+        </if>
+        <if test="timePeriod != null">
+            AND ir.time_period = #{timePeriod}
+        </if>
+        <if test="customStartTimeMinutes != null and customEndTimeMinutes != null">
+            AND (
+                CASE 
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN 
+                        CAST(SUBSTRING_INDEX(i.admission_time, ':', 1) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(i.admission_time, ':', 2), ':', -1) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{3,4}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, LENGTH(i.admission_time) - 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, LENGTH(i.admission_time) - 1, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{6}$' THEN 
+                        CAST(SUBSTRING(i.admission_time, 1, 2) AS UNSIGNED) * 60 + 
+                        CAST(SUBSTRING(i.admission_time, 3, 2) AS UNSIGNED)
+                    WHEN i.admission_time REGEXP '^[0-9]{1,2}$' THEN 
+                        CAST(i.admission_time AS UNSIGNED) * 60
+                    ELSE NULL
+                END
+            ) BETWEEN #{customStartTimeMinutes} AND #{customEndTimeMinutes}
+        </if>
+        ORDER BY ir.patient_id
+    </select>
+
+</mapper>

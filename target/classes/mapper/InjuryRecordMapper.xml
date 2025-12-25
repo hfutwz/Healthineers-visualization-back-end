@@ -9,7 +9,7 @@
         SELECT latitude, longitude, COUNT(*) as count
         FROM injuryrecord
         WHERE admission_date BETWEEN #{startDate} AND #{endDate}
-        <if test="timePeriods != null and size() > 0">
+        <if test="timePeriods != null and timePeriods.size() > 0">
             AND (time_period IN
             <foreach collection="timePeriods" item="tp" open="(" separator="," close=")">
                 #{tp}
@@ -26,6 +26,12 @@
         SELECT latitude, longitude, COUNT(*) as count
         FROM injuryrecord
         WHERE 1=1
+        <if test="years != null and years.size() > 0">
+            AND YEAR(admission_date) IN
+            <foreach collection="years" item="y" open="(" separator="," close=")">
+                #{y}
+            </foreach>
+        </if>
         <if test="seasons != null and seasons.size() > 0">
             AND season IN
             <foreach collection="seasons" item="s" open="(" separator="," close=")">
@@ -42,6 +48,93 @@
         AND latitude IS NOT NULL
         AND longitude IS NOT NULL
         GROUP BY latitude, longitude
+    </select>
+
+    <!-- 24小时统计数据查询 -->
+    <select id="selectHourlyStatistics" parameterType="map" resultType="com.demo.dto.HourlyStatisticsDTO">
+        SELECT 
+            CASE 
+                -- 形如 HH:mm 或 H:mm 或 HH:mm:ss / H:mm:ss，取冒号前的小时
+                WHEN admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN CAST(SUBSTRING_INDEX(admission_time, ':', 1) AS UNSIGNED)
+                -- 形如 HHmm（4位）或 Hmm（3位），去掉最后两位分钟
+                WHEN admission_time REGEXP '^[0-9]{3,4}$' THEN CAST(SUBSTRING(admission_time, 1, LENGTH(admission_time) - 2) AS UNSIGNED)
+                -- 形如 HHmmss（6位），取前两位小时
+                WHEN admission_time REGEXP '^[0-9]{6}$' THEN CAST(SUBSTRING(admission_time, 1, 2) AS UNSIGNED)
+                -- 仅小时（1-2位）
+                WHEN admission_time REGEXP '^[0-9]{1,2}$' THEN CAST(admission_time AS UNSIGNED)
+                ELSE NULL
+            END as hour,
+            COUNT(*) as count
+        FROM injuryrecord
+        WHERE 1=1
+        <if test="year != null">
+            AND YEAR(admission_date) = #{year}
+        </if>
+        <if test="seasons != null and seasons.size() > 0">
+            AND season IN
+            <foreach collection="seasons" item="s" open="(" separator="," close=")">
+                #{s}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND admission_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND admission_date &lt;= #{endDate}
+        </if>
+        AND admission_time IS NOT NULL
+        AND admission_time != ''
+        GROUP BY hour
+        HAVING hour IS NOT NULL AND hour BETWEEN 0 AND 23
+        ORDER BY hour
+    </select>
+
+    <!-- 可用年份列表 -->
+    <select id="selectAvailableYears" resultType="java.lang.Integer">
+        SELECT DISTINCT YEAR(admission_date) AS y
+        FROM injuryrecord
+        WHERE admission_date IS NOT NULL
+        ORDER BY y ASC
+    </select>
+
+    <!-- 根据时间段分组查询患者数量 -->
+    <select id="selectPatientCountByHours" parameterType="map" resultType="java.lang.Integer">
+        SELECT COUNT(DISTINCT patient_id) as count
+        FROM injuryrecord
+        WHERE 1=1
+        <if test="year != null">
+            AND YEAR(admission_date) = #{year}
+        </if>
+        <if test="seasons != null and seasons.size() > 0">
+            AND season IN
+            <foreach collection="seasons" item="s" open="(" separator="," close=")">
+                #{s}
+            </foreach>
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND admission_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND admission_date &lt;= #{endDate}
+        </if>
+        AND admission_time IS NOT NULL
+        AND admission_time != ''
+        AND (
+            CASE 
+                -- 形如 HH:mm 或 H:mm 或 HH:mm:ss / H:mm:ss，取冒号前的小时
+                WHEN admission_time REGEXP '^[0-9]{1,2}:[0-9]{1,2}(:[0-9]{1,2})?$' THEN CAST(SUBSTRING_INDEX(admission_time, ':', 1) AS UNSIGNED)
+                -- 形如 HHmm（4位）或 Hmm（3位），去掉最后两位分钟
+                WHEN admission_time REGEXP '^[0-9]{3,4}$' THEN CAST(SUBSTRING(admission_time, 1, LENGTH(admission_time) - 2) AS UNSIGNED)
+                -- 形如 HHmmss（6位），取前两位小时
+                WHEN admission_time REGEXP '^[0-9]{6}$' THEN CAST(SUBSTRING(admission_time, 1, 2) AS UNSIGNED)
+                -- 仅小时（1-2位）
+                WHEN admission_time REGEXP '^[0-9]{1,2}$' THEN CAST(admission_time AS UNSIGNED)
+                ELSE NULL
+            END
+        ) IN
+        <foreach collection="hours" item="h" open="(" separator="," close=")">
+            #{h}
+        </foreach>
     </select>
 
 </mapper>

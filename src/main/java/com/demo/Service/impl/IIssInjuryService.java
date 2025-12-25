@@ -26,4 +26,9 @@ public interface IIssInjuryService extends IService<IssInjury> {
      */
     List<IssInjuryDTO> getInjuryByLocationAndFilters(Double longitude, Double latitude, List<Integer> seasons, List<Integer> timePeriods);
 
+    /**
+     * 根据经度、纬度、季节和时间段查询患者ID列表（只返回ID，减少数据传输）
+     */
+    List<Integer> getPatientIdsByLocationAndFilters(Double longitude, Double latitude, List<Integer> seasons, List<Integer> timePeriods);
+
 }

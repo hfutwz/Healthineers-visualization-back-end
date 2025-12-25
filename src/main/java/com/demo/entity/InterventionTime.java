@@ -1,8 +1,10 @@
 package com.demo.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -11,32 +13,38 @@ import java.time.LocalDate;
 
 /**
  * 建表语句
- * CREATE TABLE InterventionTime (
- *     intervention_id INT AUTO_INCREMENT PRIMARY KEY COMMENT '干预方式ID',
- *     patient_id INT NOT NULL COMMENT '患者ID,外键',
- *     admission_date DATE NOT NULL COMMENT '接诊日期',
- *     admission_time VARCHAR(4) NOT NULL COMMENT '接诊时间',
- *     -- 各干预方式的时间点，存储为4位字符串（HHMM），为空表示无此干预
- *     peripheral VARCHAR(4) DEFAULT NULL COMMENT '外周',
- *     iv_line VARCHAR(4) DEFAULT NULL COMMENT '深静脉',
- *     central_access VARCHAR(4) DEFAULT NULL COMMENT '骨通道',
- *     nasal_pipe VARCHAR(4) DEFAULT NULL COMMENT '鼻导管',
- *     face_mask VARCHAR(4) DEFAULT NULL COMMENT '面罩',
- *     endotracheal_tube VARCHAR(4) DEFAULT NULL COMMENT '气管插管',
- *     ventilator VARCHAR(4) DEFAULT NULL COMMENT '呼吸机开始时间',
- *     cpr_start_time VARCHAR(4) DEFAULT NULL COMMENT '心肺复苏开始时间',
- *     cpr_end_time VARCHAR(4) DEFAULT NULL COMMENT '心肺复苏结束时间',
- *     ultrasound VARCHAR(4) DEFAULT NULL COMMENT 'B超',
- *     CT VARCHAR(4) DEFAULT NULL COMMENT 'CT',
- *     tourniquet VARCHAR(4) DEFAULT NULL COMMENT '止血带',
- *     blood_draw VARCHAR(4) DEFAULT NULL COMMENT '采血',
- *     catheter VARCHAR(4) DEFAULT NULL COMMENT '导尿',
- *     gastric_tube VARCHAR(4) DEFAULT NULL COMMENT '胃管',
- *     transfusion_start VARCHAR(4) DEFAULT NULL COMMENT '输血开始时间',
- *     transfusion_end VARCHAR(4) DEFAULT NULL COMMENT '输血结束时间',
- *     leave_surgery_time VARCHAR(4) DEFAULT NULL COMMENT '离开抢救室时间',
- *     CONSTRAINT fk_intervention_patient FOREIGN KEY (patient_id) REFERENCES Patient(patient_id) -- 假设患者表为Patients，外键关联
- *     )COMMENT='干预方式时间表';
+ CREATE TABLE interventiontime (
+ intervention_id int AUTO_INCREMENT COMMENT '干预方式ID' PRIMARY KEY,
+ patient_id int NOT NULL COMMENT '患者ID,外键',
+ admission_date date NOT NULL COMMENT '接诊日期',
+ admission_time varchar(4) NOT NULL COMMENT '接诊时间',
+ peripheral varchar(4) NULL COMMENT '外周',
+ iv_line varchar(4) NULL COMMENT '深静脉',
+ central_access varchar(4) NULL COMMENT '骨通道',
+ nasal_pipe varchar(4) NULL COMMENT '鼻导管',
+ face_mask varchar(4) NULL COMMENT '面罩',
+ endotracheal_tube varchar(4) NULL COMMENT '气管插管',
+ ventilator varchar(4) NULL COMMENT '呼吸机',
+ cpr varchar(2) NULL COMMENT '心肺复苏(是/否)',
+ cpr_start_time varchar(4) NULL COMMENT '心肺复苏开始时间',
+ cpr_end_time varchar(4) NULL COMMENT '心肺复苏结束时间',
+ ultrasound varchar(4) NULL COMMENT 'B超',
+ CT varchar(4) NULL COMMENT 'CT',
+ tourniquet varchar(4) NULL COMMENT '止血带',
+ blood_draw varchar(4) NULL COMMENT '采血',
+ catheter varchar(4) NULL COMMENT '导尿',
+ gastric_tube varchar(4) NULL COMMENT '胃管',
+ transfusion varchar(2) NULL COMMENT '输血(是/否)',
+ transfusion_start varchar(4) NULL COMMENT '输血开始时间',
+ transfusion_end varchar(4) NULL COMMENT '输血结束时间',
+ leave_surgery_time varchar(4) NULL COMMENT '离开抢救室时间',
+ leave_surgery_date date NULL COMMENT '离开抢救室日期',
+ patient_destination varchar(100) NULL COMMENT '病人去向',
+ death varchar(2) NULL COMMENT '死亡(是/否)',
+ death_date date NULL COMMENT '死亡日期',
+ death_time varchar(4) NULL COMMENT '死亡时间',
+ CONSTRAINT fk_intervention_patient FOREIGN KEY (patient_id) REFERENCES patient (patient_id)
+ ) COMMENT '干预方式时间表';
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
@@ -103,6 +111,8 @@ public class InterventionTime {
     /**
      * CT
      */
+    @TableField("ct")
+    @JsonProperty("CT")
     private String CT;
     /**
      * 止血带
@@ -132,4 +142,32 @@ public class InterventionTime {
      * 离开抢救室时间
      */
     private String leaveSurgeryTime;
+    /**
+     * 心肺复苏(是/否)
+     */
+    private String cpr;
+    /**
+     * 输血(是/否)
+     */
+    private String transfusion;
+    /**
+     * 离开抢救室日期
+     */
+    private LocalDate leaveSurgeryDate;
+    /**
+     * 病人去向
+     */
+    private String patientDestination;
+    /**
+     * 死亡(是/否)
+     */
+    private String death;
+    /**
+     * 死亡日期
+     */
+    private LocalDate deathDate;
+    /**
+     * 死亡时间
+     */
+    private String deathTime;
 }

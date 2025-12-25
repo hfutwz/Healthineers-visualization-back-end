@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.GcsScoreMapper">
+
+    <!-- 根据患者ID查询GCS评分（如果有多条记录，返回最新的一条） -->
+    <select id="selectByPatientId" parameterType="java.lang.Integer" resultType="com.demo.entity.GcsScore">
+        SELECT * FROM gcs_score WHERE patient_id = #{patientId} ORDER BY gcs_id DESC LIMIT 1
+    </select>
+
+    <!-- 根据患者ID查询GCS评分及患者基本信息（如果有多条记录，返回最新的一条） -->
+    <select id="selectWithPatientInfo" parameterType="java.lang.Integer" resultType="com.demo.dto.GcsScoreWithPatientDTO">
+        SELECT 
+            g.gcs_id as gcsId,
+            g.patient_id as patientId,
+            p.age as age,
+            p.gender as gender,
+            g.eye_opening as eyeOpening,
+            g.verbal_response as verbalResponse,
+            g.motor_response as motorResponse,
+            g.total_score as totalScore,
+            g.eye_description as eyeDescription,
+            g.verbal_description as verbalDescription,
+            g.motor_description as motorDescription,
+            g.consciousness_level as consciousnessLevel
+        FROM gcs_score g
+        LEFT JOIN patient p ON g.patient_id = p.patient_id
+        WHERE g.patient_id = #{patientId}
+        ORDER BY g.gcs_id DESC
+        LIMIT 1
+    </select>
+
+</mapper>

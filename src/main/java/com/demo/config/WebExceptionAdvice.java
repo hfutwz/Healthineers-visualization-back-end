@@ -1,17 +1,12 @@
 package com.demo.config;
 
-import com.demo.dto.Result;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-@Slf4j
-@RestControllerAdvice
+/**
+ * 旧的异常处理器，已被 GlobalExceptionHandler 替代
+ * 保留此类以避免编译错误，但实际异常处理已迁移到 GlobalExceptionHandler
+ * 
+ * @deprecated 请使用 {@link GlobalExceptionHandler} 替代
+ */
+@Deprecated
 public class WebExceptionAdvice {
-
-    @ExceptionHandler(RuntimeException.class)
-    public Result handleRuntimeException(RuntimeException e) {
-        log.error(e.toString(), e);
-        return Result.fail("服务器异常");
-    }
+    // 此类已废弃，所有异常处理已迁移到 GlobalExceptionHandler
 }

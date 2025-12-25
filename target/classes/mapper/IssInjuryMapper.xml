@@ -13,7 +13,14 @@
         iss.abdomen AS abdomen,
         iss.limbs AS limbs,
         iss.body AS body,
-        iss.iss_score AS issScore
+        iss.iss_score AS issScore,
+        iss.head_neck_details AS headNeckDetails,
+        iss.face_details AS faceDetails,
+        iss.chest_details AS chestDetails,
+        iss.abdomen_details AS abdomenDetails,
+        iss.limbs_details AS limbsDetails,
+        iss.body_details AS bodyDetails,
+        iss.has_details AS hasDetails
         FROM injuryrecord ir
         LEFT JOIN iss_patient_injury_severity iss ON ir.patient_id = iss.patient_id
         WHERE
@@ -37,6 +44,34 @@
         POWER(SIN(RADIANS(#{longitude} - ir.longitude) / 2), 2)
         ))
         ) &lt; 500
+    </select>
+
+    <!-- 根据经度、纬度、季节和时间段查询患者ID列表（只返回ID，减少数据传输） -->
+    <select id="selectPatientIdsByLocationAndFilters" resultType="java.lang.Integer">
+        SELECT DISTINCT ir.patient_id
+        FROM injuryrecord ir
+        WHERE
+        1=1
+        <if test="seasons != null and seasons.size() > 0">
+            AND ir.season IN
+            <foreach collection="seasons" item="s" separator="," open="(" close=")">
+                #{s}
+            </foreach>
+        </if>
+        <if test="timePeriods != null and timePeriods.size() > 0">
+            AND ir.time_period IN
+            <foreach collection="timePeriods" item="tp" separator="," open="(" close=")">
+                #{tp}
+            </foreach>
+        </if>
+        AND (
+        6371000 * 2 * ASIN(SQRT(
+        POWER(SIN(RADIANS(#{latitude} - ir.latitude) / 2), 2) +
+        COS(RADIANS(#{latitude})) * COS(RADIANS(ir.latitude)) *
+        POWER(SIN(RADIANS(#{longitude} - ir.longitude) / 2), 2)
+        ))
+        ) &lt; 500
+        ORDER BY ir.patient_id
     </select>
 
 </mapper>

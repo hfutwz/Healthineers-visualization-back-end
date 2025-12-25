@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.PatientMapper">
+
+    <!-- 批量插入患者数据（不允许主键重复） -->
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO patient (patient_id, gender, age, is_green_channel, height, weight, name) VALUES
+        <foreach collection="patients" item="item" separator=",">
+            (#{item.patientId}, #{item.gender}, #{item.age}, #{item.isGreenChannel}, #{item.height}, #{item.weight}, #{item.name})
+        </foreach>
+    </insert>
+
+</mapper>
+
